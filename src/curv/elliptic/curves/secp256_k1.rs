@@ -59,8 +59,8 @@ pub struct Secp256k1Scalar {
 }
 #[derive(Clone, Debug)]
 pub struct Secp256k1Point {
-    purpose: &'static str,
-    ge: PK,
+    pub purpose: &'static str,
+    pub ge: PK,
 }
 
 pub type GE = Secp256k1Point;
@@ -356,7 +356,7 @@ impl ECPoint<PK, SK> for Secp256k1Point {
 
         let byte_len = bytes_vec.len();
         match byte_len {
-            33...63 => {
+            33..=63 => {
                 let mut template = vec![0; 64 - bytes_vec.len()];
                 template.extend_from_slice(&bytes);
                 let bytes_vec = template;
@@ -373,7 +373,7 @@ impl ECPoint<PK, SK> for Secp256k1Point {
                 test.map_err(|_err| ErrorKey::InvalidPublicKey)
             }
 
-            0...32 => {
+            0..=32 => {
                 let mut template = vec![0; 32 - bytes_vec.len()];
                 template.extend_from_slice(&bytes);
                 let bytes_vec = template;
@@ -767,5 +767,4 @@ mod tests {
         let c2 = a * b;
         assert_eq!(c1.get_element(), c2.get_element());
     }
-
 }

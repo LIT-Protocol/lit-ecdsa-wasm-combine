@@ -1,34 +1,29 @@
 [package]
-name = "emerald-city"
-version = "0.2.0"
+name = "lit_ecdsa_combine"
+version = "0.1.0"
 
-authors = [
-    "Omer <omer@kzencorp.com>"
-]
-description = "WASM/HW-friendly lightweight client application for threshold ECDSA"
-homepage = "https://github.com/KZen-networks"
-repository = "https://github.com/KZen-networks/emerald-city"
+authors = ["brendon <brendon@litprotocol.com>"]
+description = "WASM friendly recombination code for threshold ECDSA."
+homepage = "https://github.com/lit-protocol"
 license = "GPL-3.0-or-later"
 
 
 [lib]
-crate-type = ["staticlib", "lib"]
-
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+wasm-bindgen = { version = "0.2.63", features = ["serde-serialize"] }
 rand = "0.6"
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"
 
-num-bigint = {version = "0.2.2" , features = ["serde","rand"]}
+num-bigint = { version = "0.2.2", features = ["serde", "rand"] }
 num-integer = "0.1"
 num-traits = "0.2.6"
-
 
 bit-vec = "0.5"
 cryptoxide = "0.1.1"
 zeroize = "0.5.2"
 
 libsecp256k1 = "0.2.2"
-
