@@ -32,8 +32,8 @@ use curv::arithmetic::traits::{Converter, Modulo};
 use curv::cryptographic_primitives::hashing::constants::{
     CURVE_ORDER, GENERATOR_X, GENERATOR_Y, SECRET_KEY_SIZE, UNCOMPRESSED_PUBLIC_KEY_SIZE,
 };
-use curv::cryptographic_primitives::hashing::hash_sha256::HSha256;
-use curv::cryptographic_primitives::hashing::traits::Hash;
+// use curv::cryptographic_primitives::hashing::hash_sha256::HSha256;
+// use curv::cryptographic_primitives::hashing::traits::Hash;
 use num_traits::Num;
 use serde::de;
 use serde::de::{MapAccess, Visitor};
@@ -44,7 +44,10 @@ use std::fmt;
 use std::ops::{Add, Mul};
 use std::ptr;
 use std::sync::atomic;
-use zeroize::Zeroize;
+
+// extern crate zeroize;
+
+use super::zeroize::Zeroize;
 
 use super::secp256k1::curve::Scalar;
 
@@ -91,22 +94,22 @@ impl Secp256k1Point {
     // This function is a result of a manual testing to find
     // this minimal number of hashes and therefore it is written like this.
     // the prefix "2" is to complete for the right parity of the point
-    pub fn base_point2() -> Secp256k1Point {
-        let g: Secp256k1Point = ECPoint::generator();
-        let hash = HSha256::create_hash(&[&g.bytes_compressed_to_big_int()]);
+    // pub fn base_point2() -> Secp256k1Point {
+    //     let g: Secp256k1Point = ECPoint::generator();
+    //     let hash = HSha256::create_hash(&[&g.bytes_compressed_to_big_int()]);
 
-        let hash = HSha256::create_hash(&[&hash]);
+    //     let hash = HSha256::create_hash(&[&hash]);
 
-        let hash = HSha256::create_hash(&[&hash]);
-        let mut hash_vec = BigInt::to_vec(&hash);
-        let mut template: Vec<u8> = vec![2];
-        template.append(&mut hash_vec);
+    //     let hash = HSha256::create_hash(&[&hash]);
+    //     let mut hash_vec = BigInt::to_vec(&hash);
+    //     let mut template: Vec<u8> = vec![2];
+    //     template.append(&mut hash_vec);
 
-        Secp256k1Point {
-            purpose: "random",
-            ge: PK::parse_slice(&template, None).unwrap(),
-        }
-    }
+    //     Secp256k1Point {
+    //         purpose: "random",
+    //         ge: PK::parse_slice(&template, None).unwrap(),
+    //     }
+    // }
 
     pub fn copy(&self) -> Secp256k1Point {
         Secp256k1Point {
@@ -421,6 +424,7 @@ impl ECPoint<PK, SK> for Secp256k1Point {
         let mut new_point = self.clone();
         new_point
             .ge
+            //.tweak_mul_assign_with_context(fe, context)
             .tweak_mul_assign(fe)
             .expect("Assignment expected");
         new_point
@@ -590,181 +594,5 @@ impl<'de> Visitor<'de> for Secp256k1PointVisitor {
         let by = BigInt::from_hex(&y);
 
         Ok(Secp256k1Point::from_coor(&bx, &by))
-    }
-}
-#[cfg(test)]
-mod tests {
-    use curv::arithmetic::num_bigint::BigInt;
-    use curv::arithmetic::traits::Converter;
-    use curv::arithmetic::traits::Modulo;
-    use curv::cryptographic_primitives::hashing::hash_sha256::HSha256;
-    use curv::cryptographic_primitives::hashing::traits::Hash;
-    use curv::elliptic::curves::secp256_k1::Secp256k1Point;
-    use curv::elliptic::curves::secp256_k1::Secp256k1Scalar;
-    use curv::elliptic::curves::secp256_k1::{FE, GE};
-    use curv::elliptic::curves::traits::ECPoint;
-    use curv::elliptic::curves::traits::ECScalar;
-    use serde_json;
-    use ErrorKey;
-    #[test]
-    fn serialize_sk() {
-        let scalar: Secp256k1Scalar = ECScalar::from(&BigInt::from(123456 as u32));
-        println!("TEST4 {:?}", scalar.clone());
-        let s = serde_json::to_string(&scalar).expect("Failed in serialization");
-        assert_eq!(s, "\"1e240\"");
-    }
-
-    #[test]
-    fn serialize_rand_pk_verify_pad() {
-        let vx = BigInt::from_hex(
-            &"ccaf75ab7960a01eb421c0e2705f6e84585bd0a094eb6af928c892a4a2912508".to_string(),
-        );
-
-        let vy = BigInt::from_hex(
-            &"e788e294bd64eee6a73d2fc966897a31eb370b7e8e9393b0d8f4f820b48048df".to_string(),
-        );
-
-        Secp256k1Point::from_coor(&vx, &vy); // x and y of size 32
-
-        let x = BigInt::from_hex(
-            &"5f6853305467a385b56a5d87f382abb52d10835a365ec265ce510e04b3c3366f".to_string(),
-        );
-
-        let y = BigInt::from_hex(
-            &"b868891567ca1ee8c44706c0dc190dd7779fe6f9b92ced909ad870800451e3".to_string(),
-        );
-
-        Secp256k1Point::from_coor(&x, &y); // x and y not of size 32 each
-
-        let r = Secp256k1Point::random_point();
-        let r_expected = Secp256k1Point::from_coor(&r.x_coor().unwrap(), &r.y_coor().unwrap());
-
-        assert_eq!(r.x_coor().unwrap(), r_expected.x_coor().unwrap());
-        assert_eq!(r.y_coor().unwrap(), r_expected.y_coor().unwrap());
-    }
-
-    #[test]
-    fn deserialize_sk() {
-        let s = "\"1e240\"";
-        let dummy: Secp256k1Scalar = serde_json::from_str(s).expect("Failed in serialization");
-        println!("TEST3,{:?}", dummy.clone());
-        let sk: Secp256k1Scalar = ECScalar::from(&BigInt::from(123456 as u32));
-
-        assert_eq!(dummy, sk);
-    }
-
-    #[test]
-    fn serialize_pk() {
-        let pk = Secp256k1Point::generator();
-        let x = pk.x_coor().unwrap();
-        let y = pk.y_coor().unwrap();
-        let s = serde_json::to_string(&pk).expect("Failed in serialization");
-
-        let expected = format!("{{\"x\":\"{}\",\"y\":\"{}\"}}", x.to_hex(), y.to_hex());
-        assert_eq!(s, expected);
-
-        let des_pk: Secp256k1Point = serde_json::from_str(&s).expect("Failed in serialization");
-        assert_eq!(des_pk.ge, pk.ge);
-    }
-
-    #[test]
-    fn test_serdes_pk() {
-        let pk = GE::generator();
-        let s = serde_json::to_string(&pk).expect("Failed in serialization");
-        let des_pk: GE = serde_json::from_str(&s).expect("Failed in deserialization");
-        assert_eq!(des_pk, pk);
-
-        let pk = GE::base_point2();
-        let s = serde_json::to_string(&pk).expect("Failed in serialization");
-        let des_pk: GE = serde_json::from_str(&s).expect("Failed in deserialization");
-        assert_eq!(des_pk, pk);
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_serdes_bad_pk() {
-        let pk = GE::generator();
-        let s = serde_json::to_string(&pk).expect("Failed in serialization");
-        // we make sure that the string encodes invalid point:
-        let s: String = s.replace("79be", "79bf");
-        let des_pk: GE = serde_json::from_str(&s).expect("Failed in deserialization");
-        assert_eq!(des_pk, pk);
-    }
-
-    #[test]
-    fn test_from_bytes() {
-        let g = Secp256k1Point::generator();
-        let hash = HSha256::create_hash(&vec![&g.bytes_compressed_to_big_int()]);
-        let hash_vec = BigInt::to_vec(&hash);
-        let result = Secp256k1Point::from_bytes(&hash_vec);
-        assert_eq!(result.unwrap_err(), ErrorKey::InvalidPublicKey)
-    }
-
-    #[test]
-    fn test_from_bytes_3() {
-        let test_vec = [
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 1, 2, 3, 4, 5, 6,
-        ];
-        let result = Secp256k1Point::from_bytes(&test_vec);
-        assert!(result.is_ok() | result.is_err())
-    }
-
-    #[test]
-    fn test_from_bytes_4() {
-        let test_vec = [
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6,
-        ];
-        let result = Secp256k1Point::from_bytes(&test_vec);
-        assert!(result.is_ok() | result.is_err())
-    }
-
-    #[test]
-    fn test_from_bytes_5() {
-        let test_vec = [
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5,
-            6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4,
-            5, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3,
-            4, 5, 6,
-        ];
-        let result = Secp256k1Point::from_bytes(&test_vec);
-        assert!(result.is_ok() | result.is_err())
-    }
-
-    #[test]
-    fn test_minus_point() {
-        let a: FE = ECScalar::new_random();
-        let b: FE = ECScalar::new_random();
-        let b_bn = b.to_big_int();
-        let order = FE::q();
-        let minus_b = BigInt::mod_sub(&order, &b_bn, &order);
-        let a_minus_b = BigInt::mod_add(&a.to_big_int(), &minus_b, &order);
-        let a_minus_b_fe: FE = ECScalar::from(&a_minus_b);
-        let base: GE = ECPoint::generator();
-        let point_ab1 = base.clone() * a_minus_b_fe;
-
-        let point_a = base.clone() * a;
-        let point_b = base.clone() * b;
-        let point_ab2 = point_a.sub_point(&point_b.get_element());
-        assert_eq!(point_ab1.get_element(), point_ab2.get_element());
-    }
-
-    #[test]
-    fn test_invert() {
-        let a: FE = ECScalar::new_random();
-        let a_bn = a.to_big_int();
-        let a_inv = a.invert();
-        let a_inv_bn_1 = BigInt::mod_inv(&a_bn, &FE::q());
-        let a_inv_bn_2 = a_inv.to_big_int();
-        assert_eq!(a_inv_bn_1, a_inv_bn_2);
-    }
-
-    #[test]
-    fn test_scalar_mul_scalar() {
-        let a: FE = ECScalar::new_random();
-        let b: FE = ECScalar::new_random();
-        let c1 = a.mul(&b.get_element());
-        let c2 = a * b;
-        assert_eq!(c1.get_element(), c2.get_element());
     }
 }

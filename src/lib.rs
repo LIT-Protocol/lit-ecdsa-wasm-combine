@@ -1,5 +1,9 @@
 extern crate wasm_bindgen;
+use std::str::FromStr;
+
 use curv::arithmetic::traits::BitManipulation;
+use num_bigint::BigUint;
+use num_traits::Num;
 use wasm_bindgen::prelude::*;
 
 #[macro_use]
@@ -11,14 +15,13 @@ extern crate num_bigint;
 extern crate num_integer;
 extern crate num_traits;
 extern crate rand;
-extern crate zeroize;
 
-extern crate cryptoxide;
+// extern crate cryptoxide;
 
 pub mod curv;
 
 #[derive(Copy, PartialEq, Eq, Clone, Debug)]
-pub enum Error {
+enum Error {
     InvalidKey,
     InvalidSS,
     InvalidCom,
@@ -29,27 +32,17 @@ pub enum ErrorKey {
     InvalidPublicKey,
 }
 
-pub enum ErrorSS {
+enum ErrorSS {
     VerifyShareError,
 }
 
 use curv::arithmetic::num_bigint::BigInt;
-use curv::elliptic::curves::secp256_k1::{Secp256k1Scalar, FE, GE, PK};
+use curv::elliptic::curves::secp256_k1::{Secp256k1Point, Secp256k1Scalar, FE, GE};
 use curv::elliptic::curves::traits::*;
 use num_integer::Integer;
 
-// #[derive(Clone, Serialize, Deserialize)]
-// pub struct LocalSignature {
-//     pub l_i: FE,
-//     pub rho_i: FE,
-//     pub R: GE,
-//     pub s_i: FE,
-//     pub m: BigInt,
-//     pub y: GE,
-// }
-
 #[derive(Clone, Serialize, Deserialize)]
-pub struct LocalSignature {
+struct LocalSignature {
     pub r: FE,
     pub R: GE,
     pub s_i: FE,
@@ -58,7 +51,7 @@ pub struct LocalSignature {
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
-pub struct Signature {
+struct Signature {
     pub r: FE,
     pub s: FE,
 }
@@ -71,29 +64,105 @@ pub struct SignatureRecid {
 }
 
 #[wasm_bindgen]
-pub fn combine_signature(ls: String, s_vec: String) -> String {
+pub fn combine_signature(R_x: &str, R_y: &str, shares: &str) -> String {
+    
+    let shares: Vec<FE> = serde_json::from_str(&shares).unwrap();
+    let R_x = BigUint::from_str_radix(R_x,16).unwrap();
+    let R_y = BigUint::from_str_radix(R_y, 16).unwrap();
+
+
+    let sig = combine_signature_internal(        
+        R_x,
+        R_y,
+        &shares,
+    );
+
+    serde_json::to_string(&sig).unwrap()
+}
+
+
+
+#[wasm_bindgen]
+pub fn combine_signature2(ls: &str, s_vec: &str) -> String {
     let ls: LocalSignature = serde_json::from_str(&ls).unwrap();
     let s_vec: Vec<FE> = serde_json::from_str(&s_vec).unwrap();
 
-    let sig = output_signature(&ls, &s_vec);
+    let sig = combine_signature_internal2(
+        ls.s_i.clone(),
+        ls.R.x_coor().unwrap(),
+        ls.R.y_coor().unwrap(),
+        &s_vec,
+    );
 
-    if sig.is_ok() {
-        let sig = sig.unwrap();
-        return serde_json::to_string(&sig).unwrap();
-    }
-
-    String::from("Failed")
+    serde_json::to_string(&sig).unwrap()
 }
 
-pub fn output_signature(ls: &LocalSignature, s_vec: &Vec<FE>) -> Result<SignatureRecid, Error> {
+pub fn combine_signature_internal(
+    R_x: BigInt,
+    R_y: BigInt,
+    s_vec: &Vec<FE>,
+) -> SignatureRecid {
+
+    // reduce -> but what about reference?
+    let init = s_vec[0].clone();
+    let mut s = s_vec.iter().skip(1).fold( init, | acc, x| acc + x );
+
+    let s_bn = s.to_big_int();
+
+    let r: FE = ECScalar::from(&R_x.mod_floor(&FE::q())); // q is the group order for the Secp256k1 curve.
+
+    let ry: BigInt = R_y.mod_floor(&FE::q());
+
+    // Calculate recovery id
+
+    let is_ry_odd = ry.test_bit(0);
+    let mut recid = if is_ry_odd { 1 } else { 0 };
+    let s_tag_bn = FE::q() - &s_bn;
+    if s_bn > s_tag_bn {
+        s = ECScalar::from(&s_tag_bn);
+        recid ^= 1;
+    }
+
+    SignatureRecid { r, s, recid }
+}
+
+
+
+pub fn combine_signature_internal2(
+    s_i: Secp256k1Scalar,
+    R_x: BigInt,
+    R_y: BigInt,
+    s_vec: &Vec<FE>,
+) -> SignatureRecid {
+    let mut s = s_vec.iter().fold(s_i.clone(), |acc, x| acc + x);
+
+    let s_bn = s.to_big_int();
+
+    let r: FE = ECScalar::from(&R_x.mod_floor(&FE::q())); // q is the group order for the Secp256k1 curve.
+
+    let ry: BigInt = R_y.mod_floor(&FE::q());
+
+    // Calculate recovery id
+
+    let is_ry_odd = ry.test_bit(0);
+    let mut recid = if is_ry_odd { 1 } else { 0 };
+    let s_tag_bn = FE::q() - &s_bn;
+    if s_bn > s_tag_bn {
+        s = ECScalar::from(&s_tag_bn);
+        recid ^= 1;
+    }
+
+    SignatureRecid { r, s, recid }
+}
+
+// This is a representation of the GG20 version of recombination.
+
+fn output_signature(ls: &LocalSignature, s_vec: &Vec<FE>) -> Result<SignatureRecid, Error> {
     let mut s = s_vec.iter().fold(ls.s_i.clone(), |acc, x| acc + x);
 
     let s_bn = s.to_big_int();
 
     let r: FE = ECScalar::from(&ls.R.x_coor().unwrap().mod_floor(&FE::q())); // q is the group order for the Secp256k1 curve.
-
-    let qsv = FE::q().to_str_radix(16);
-    let rsv = r.to_big_int().to_str_radix(16);
 
     let ry: BigInt = ls.R.y_coor().unwrap().mod_floor(&FE::q());
 
@@ -121,7 +190,11 @@ pub fn output_signature(ls: &LocalSignature, s_vec: &Vec<FE>) -> Result<Signatur
     }
 }
 
-pub fn verify(sig: &SignatureRecid, y: &GE, message: &BigInt) -> Result<(), Error> {
+// verify's the signature - this function brings a lot of additional library overhead into scope
+// and with the inclusion of web3/ethers in the JS side of the SDK, we aren't providing the users with any
+// additional information.
+
+fn verify(sig: &SignatureRecid, y: &GE, message: &BigInt) -> Result<(), Error> {
     let b = sig.s.invert();
     let a: FE = ECScalar::from(message);
     let u1 = a * &b;
@@ -140,22 +213,41 @@ pub fn verify(sig: &SignatureRecid, y: &GE, message: &BigInt) -> Result<(), Erro
 
 #[cfg(test)]
 mod tests {
-    use std::{convert::TryInto, str::FromStr};
+    use std::str::FromStr;
 
-    use num_bigint::{BigUint, ToBigInt, ToBigUint};
+    use num_bigint::BigUint;
     use num_traits::Num;
 
     use crate::{
+        combine_signature,
         curv::elliptic::curves::{
-            secp256_k1::{Secp256k1Point, Secp256k1Scalar, FE, GE, PK, SK},
+            secp256_k1::{Secp256k1Point, Secp256k1Scalar, FE},
             traits::{ECPoint, ECScalar},
         },
         output_signature, LocalSignature,
     };
 
     #[test]
-    // Very basic test here, TODO: suggest better testing
     fn simple_sign_test() {
+        //let ls = "{\"r\":\"63a62e7c00f34a9de2fb55c99e672bb347b23b75991f4217dfbe31a09b627b22\",\"R\":{\"x\":\"63a62e7c00f34a9de2fb55c99e672bb347b23b75991f4217dfbe31a09b627b22\",\"y\":\"816b4d34f48365ae5df7e965d9c0292531893aa40493bc5c327e6ee39512ef31\"},\"s_i\":\"4e52aeaed3e2e07977e2d0271b0ba4d8ecaa92aad7574496c5c51aa99a1fd1a1\",\"m\":[2825099285,210371760],\"y\":{\"x\":\"bfc168dfb3e09b2899c6829bae5c99025a5d4bab2cb5b2a2b7be176379ad3a2d\",\"y\":\"18e7e02fbac1a28c0057ebb707ccb00b729cd37c0aadd42c883a6ba26581e221\"}}";
+
+        let R_x = "63a62e7c00f34a9de2fb55c99e672bb347b23b75991f4217dfbe31a09b627b22";
+
+        let R_y = "816b4d34f48365ae5df7e965d9c0292531893aa40493bc5c327e6ee39512ef31"; 
+
+        let s_vec = "[\"4e52aeaed3e2e07977e2d0271b0ba4d8ecaa92aad7574496c5c51aa99a1fd1a1\" ,\"4f300a5d03a85c88bc7d85d5b29b3cd608c1fa1146c41d170f65e750f9ea0264\",\"95b1b520b25addae748e4f1cbf2c79afcef578da3285c8de71df35ba77d9930d\",\"c323d0f7f0626e62175539607a4205695dad2ce9362398390808a64acfc92c1f\",\"49263cfa45c1a1fd9e57e0e9a5afa7435c588e37a9c811809aa7feccf08a21a9\",\"ebd46fde3c122047f883efca7d5557e18b0f99543a8e4e1f88e69771b53a2648\",\"74e96f26cbc17cacee056abf4d822f76d8ad0829f6a230d8ddc239e4e1a1eef5\",\"87d1c86bdf1c82e6d887da3b10b26d51d33693ede49f4d0391d74a2266eb1e94\",\"aff1748ee300f71d07acd1a488a4af55ea6b5abcdd7e4b43dcd42536f3e3e7c9\",\"1b7b48af435ad3a8ee722795bc2aba16a7e92fe3a882e47664d1beb644b88de7\"]";
+
+        let result = combine_signature(R_x, R_y,  s_vec);
+
+        assert_eq!(
+            result, "{\"r\":\"63a62e7c00f34a9de2fb55c99e672bb347b23b75991f4217dfbe31a09b627b22\",\"s\":\"c851f3232a9ea4dec34129d32e199d75dbacfbda00d512e9b3afc8d0e74e7ea\",\"recid\":0}"
+        
+        );
+    }
+
+    #[test]
+    // Very basic test here, TODO: suggest better testing
+    fn simple_sign_test_from_objects() {
         let mut s_vec: Vec<FE> = Vec::new();
         s_vec.push(h2s(
             "4f300a5d03a85c88bc7d85d5b29b3cd608c1fa1146c41d170f65e750f9ea0264",
@@ -206,9 +298,9 @@ mod tests {
 
         let y: Secp256k1Point = Secp256k1Point::from_coor(&yx, &yy);
 
-        let ysr = y.bytes_compressed_to_big_int().to_str_radix(16);
-        let ysr_x = y.x_coor().unwrap().to_bigint().unwrap().to_str_radix(16);
-        let ysr_y = y.y_coor().unwrap().to_bigint().unwrap().to_str_radix(16);
+        // let ysr = y.bytes_compressed_to_big_int().to_str_radix(16);
+        // let ysr_x = y.x_coor().unwrap().to_bigint().unwrap().to_str_radix(16);
+        // let ysr_y = y.y_coor().unwrap().to_bigint().unwrap().to_str_radix(16);
 
         let rx = BigUint::from_str_radix(
             "63a62e7c00f34a9de2fb55c99e672bb347b23b75991f4217dfbe31a09b627b22",
@@ -223,19 +315,17 @@ mod tests {
 
         let R: Secp256k1Point = Secp256k1Point::from_coor(&rx, &ry);
 
-        let Rsr = R.bytes_compressed_to_big_int().to_str_radix(16);
-        let Rsr_x = R.x_coor().unwrap().to_bigint().unwrap().to_str_radix(16);
-        let Rsr_y = R.y_coor().unwrap().to_bigint().unwrap().to_str_radix(16);
+        // let Rsr = R.bytes_compressed_to_big_int().to_str_radix(16);
+        // let Rsr_x = R.x_coor().unwrap().to_bigint().unwrap().to_str_radix(16);
+        // let Rsr_y = R.y_coor().unwrap().to_bigint().unwrap().to_str_radix(16);
 
-        let msr = m.to_string();
-        // let r_bytes: &[u8; 33] = &r_bytes.try_into().unwrap();
-
-        // let R = Secp256k1Point {
-        //     purpose: "point",
-        //     ge: PK::parse_compressed(r_bytes).unwrap(),
-        // };
+        // let msr = m.to_string();
 
         let ls = LocalSignature { r, R, s_i, m, y };
+
+        let ls_l = serde_json::to_string(&ls).unwrap();
+        let ls_v = serde_json::to_string(&s_vec).unwrap();
+
         let result = output_signature(&ls, &s_vec).unwrap();
         let r = result.r.to_big_int().to_str_radix(16);
         let s = result.s.to_big_int().to_str_radix(16);
@@ -254,35 +344,3 @@ mod tests {
         ECScalar::from(&BigUint::from_str_radix(hex, 16).unwrap())
     }
 }
-
-// let r = ECScalar::from(&BigUint::from_bytes_be(&[
-//     99, 166, 46, 124, 0, 243, 74, 157, 226, 251, 85, 201, 158, 103, 43, 179, 71, 178, 59,
-//     117, 153, 31, 66, 23, 223, 190, 49, 160, 155, 98, 123, 34,
-// ]));
-
-// let s_i = ECScalar::from(
-//     &BigUint::from_str_radix(
-//         "4f300a5d03a85c88bc7d85d5b29b3cd608c1fa1146c41d170f65e750f9ea0264",
-//         16,
-//     )
-//     .unwrap(),
-// );
-
-// let m = BigUint::from_bytes_be(&[12, 138, 4, 176, 168, 99, 152, 21]);
-
-// // let y = ECPoint::from_bytes(&[
-// //     3, 191, 193, 104, 223, 179, 224, 155, 40, 153, 198, 130, 155, 174, 92, 153, 2, 90, 93,
-// //     75, 171, 44, 181, 178, 162, 183, 190, 23, 99, 121, 173, 58, 45,
-// // ])
-// // .unwrap();
-
-// // let R = ECPoint::from_bytes(&[
-// //     3, 99, 166, 46, 124, 0, 243, 74, 157, 226, 251, 85, 201, 158, 103, 43, 179, 71, 178,
-// //     59, 117, 153, 31, 66, 23, 223, 190, 49, 160, 155, 98, 123, 34,
-// // ])
-// // .unwrap();
-
-// let  p =    BigUint::from_str_radix("4bfc168dfb3e09b2899c6829bae5c99025a5d4bab2cb5b2a2b7be176379ad3a2d18e7e02fbac1a28c0057ebb707ccb00b729cd37c0aadd42c883a6ba26581e221", 16).unwrap().to_bytes_be();
-
-// let y = ECPoint::from_bytes(&p).unwrap();
-// let R = ECPoint::from_bytes(&p).unwrap();

@@ -12,3 +12,4 @@ extern crate secp256k1;
 pub mod secp256_k1;
 
 pub mod traits;
+extern crate zeroize;
