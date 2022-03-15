@@ -1,5 +1,4 @@
 extern crate wasm_bindgen;
-use std::str::FromStr;
 
 use curv::arithmetic::traits::BitManipulation;
 use num_bigint::BigUint;
@@ -32,12 +31,8 @@ pub enum ErrorKey {
     InvalidPublicKey,
 }
 
-enum ErrorSS {
-    VerifyShareError,
-}
-
 use curv::arithmetic::num_bigint::BigInt;
-use curv::elliptic::curves::secp256_k1::{Secp256k1Point, Secp256k1Scalar, FE, GE};
+use curv::elliptic::curves::secp256_k1::{  FE, GE};
 use curv::elliptic::curves::traits::*;
 use num_integer::Integer;
 
@@ -82,21 +77,6 @@ pub fn combine_signature(R_x: &str, R_y: &str, shares: &str) -> String {
 
 
 
-#[wasm_bindgen]
-pub fn combine_signature2(ls: &str, s_vec: &str) -> String {
-    let ls: LocalSignature = serde_json::from_str(&ls).unwrap();
-    let s_vec: Vec<FE> = serde_json::from_str(&s_vec).unwrap();
-
-    let sig = combine_signature_internal2(
-        ls.s_i.clone(),
-        ls.R.x_coor().unwrap(),
-        ls.R.y_coor().unwrap(),
-        &s_vec,
-    );
-
-    serde_json::to_string(&sig).unwrap()
-}
-
 pub fn combine_signature_internal(
     R_x: BigInt,
     R_y: BigInt,
@@ -126,34 +106,6 @@ pub fn combine_signature_internal(
     SignatureRecid { r, s, recid }
 }
 
-
-
-pub fn combine_signature_internal2(
-    s_i: Secp256k1Scalar,
-    R_x: BigInt,
-    R_y: BigInt,
-    s_vec: &Vec<FE>,
-) -> SignatureRecid {
-    let mut s = s_vec.iter().fold(s_i.clone(), |acc, x| acc + x);
-
-    let s_bn = s.to_big_int();
-
-    let r: FE = ECScalar::from(&R_x.mod_floor(&FE::q())); // q is the group order for the Secp256k1 curve.
-
-    let ry: BigInt = R_y.mod_floor(&FE::q());
-
-    // Calculate recovery id
-
-    let is_ry_odd = ry.test_bit(0);
-    let mut recid = if is_ry_odd { 1 } else { 0 };
-    let s_tag_bn = FE::q() - &s_bn;
-    if s_bn > s_tag_bn {
-        s = ECScalar::from(&s_tag_bn);
-        recid ^= 1;
-    }
-
-    SignatureRecid { r, s, recid }
-}
 
 // This is a representation of the GG20 version of recombination.
 

@@ -1,5 +1,5 @@
 [package]
-name = "lit_ecdsa_combine"
+name = "ecdsa_wasm"
 version = "0.1.0"
 
 authors = ["brendon <brendon@litprotocol.com>"]
