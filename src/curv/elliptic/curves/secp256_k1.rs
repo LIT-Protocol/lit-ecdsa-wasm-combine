@@ -15,6 +15,7 @@
 // The Secret Key codec: BigInt <> SecretKey
 // The Public Key codec: Point <> SecretKey
 //
+extern crate getrandom;
 
 use super::rand::{thread_rng, Rng};
 // use super::secp256k1::util::{
@@ -130,7 +131,10 @@ impl Zeroize for FE {
 impl ECScalar<SK> for Secp256k1Scalar {
     fn new_random() -> Secp256k1Scalar {
         let mut arr = [0u8; 32];
-        thread_rng().fill(&mut arr[..]);
+
+        let r = getrandom::getrandom(&mut arr[..]).unwrap();
+
+        //thread_rng().fill(&mut arr[..]);
         Secp256k1Scalar {
             purpose: "random",
             fe: SK::parse_slice(&arr[0..arr.len()]).unwrap(),
