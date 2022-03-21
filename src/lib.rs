@@ -33,7 +33,7 @@ pub enum ErrorKey {
 }
 
 use curv::arithmetic::num_bigint::BigInt;
-use curv::elliptic::curves::secp256_k1::{  FE, GE, Secp256k1Scalar};
+use curv::elliptic::curves::secp256_k1::{  FE, GE}; //, Secp256k1Scalar};
 use curv::elliptic::curves::traits::*;
 use num_integer::Integer;
 
@@ -59,37 +59,24 @@ pub struct SignatureRecid {
     pub recid: u8,
 }
 
-use web_sys::console;   
+//use web_sys::console;   // for logging to the JS console
 
 #[wasm_bindgen]
 pub fn combine_signature(R_x: &str, R_y: &str, shares: &str) -> String {
     
-    console::log_2(&"Shares".into(), &shares.into());
+    //console::log_2(&"Shares".into(), &shares.into());
 
     let shares: Vec<FE> = serde_json::from_str(&shares).unwrap();
-
     let R_x = BigUint::from_str_radix(R_x,16).unwrap();
-
-
-    
     let R_y = BigUint::from_str_radix(R_y, 16).unwrap();
-
-    
-    console::log_1(&"attempting to combine".into());
-
 
     let sig = combine_signature_internal(        
         R_x,
         R_y,
         &shares,
     );
-
-    console::log_1(&"almost done".into());
-
-
     serde_json::to_string(&sig).unwrap()
 }
-
 
 
 pub fn combine_signature_internal(
@@ -98,55 +85,25 @@ pub fn combine_signature_internal(
     s_vec: &Vec<FE>,
 ) -> SignatureRecid {
 
-
-
-    console::log_1(&"1".into());
-
     // reduce -> but what about reference?
-    let init = s_vec[0].clone();
-
-    
-    console::log_2(&"2:".into(), &init.to_big_int().to_str_radix(16).into() );
-
+    let init = s_vec[0].clone();    
+    //console::log_2(&"2:".into(), &init.to_big_int().to_str_radix(16).into() );
     let mut s = s_vec.iter().skip(1).fold(init, |acc, x| acc + x);
 
-    // let mut s = s_vec[0].clone();
-    // console::log_1(&"test.add 1".into());
-    // s = s.add(&s_vec[1].get_element());
-    // console::log_1(&"test add 2".into());
-    // console::log_2(&"2:".into(), &s.to_big_int().to_str_radix(16).into() );
-    // for v in s_vec.iter().skip(1) {
-    //         console::log_2(&"2.1-loop:".into(), &v.to_big_int().to_str_radix(16).into() );
-    //     //s = s + v.clone();
-    //  }
-
-    console::log_1(&"3".into());
     let s_bn = s.to_big_int();
-    console::log_1(&"4".into());
     let r: FE = ECScalar::from(&R_x.mod_floor(&FE::q())); // q is the group order for the Secp256k1 curve.
-    console::log_1(&"5".into());
     let ry: BigInt = R_y.mod_floor(&FE::q());
 
     // Calculate recovery id
-    console::log_1(&"6".into());
-
     let is_ry_odd = ry.test_bit(0);
-
-console::log_1(&"8".into());
-
-    let mut recid = if is_ry_odd { 1 } else { 0 };
-
-console::log_1(&"9".into());
+    let mut recid = if is_ry_odd { 1 } else { 0 };    
     let s_tag_bn = FE::q() - &s_bn;
 
-console::log_1(&"10".into());
+    
     if s_bn > s_tag_bn {
         s = ECScalar::from(&s_tag_bn);
         recid ^= 1;
     }
-
-    console::log_1(&"11".into());
-
     SignatureRecid { r, s, recid }
 }
 
