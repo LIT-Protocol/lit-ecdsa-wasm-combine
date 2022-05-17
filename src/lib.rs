@@ -1,10 +1,14 @@
 extern crate wasm_bindgen;
 extern crate web_sys;
+extern crate console_error_panic_hook;
 
 use curv::arithmetic::traits::BitManipulation;
 use num_bigint::BigUint;
 use num_traits::Num;
 use wasm_bindgen::prelude::*;
+use std::panic;
+
+
 
 #[macro_use]
 extern crate serde_derive;
@@ -33,7 +37,7 @@ pub enum ErrorKey {
 }
 
 use curv::arithmetic::num_bigint::BigInt;
-use curv::elliptic::curves::secp256_k1::{  FE, GE}; //, Secp256k1Scalar};
+use curv::elliptic::curves::secp256_k1::{  FE, GE, Secp256k1Scalar}; //, Secp256k1Scalar};
 use curv::elliptic::curves::traits::*;
 use num_integer::Integer;
 
@@ -63,9 +67,8 @@ pub struct SignatureRecid {
 
 #[wasm_bindgen]
 pub fn combine_signature(R_x: &str, R_y: &str, shares: &str) -> String {
+    panic::set_hook(Box::new(console_error_panic_hook::hook));
     
-    //console::log_2(&"Shares".into(), &shares.into());
-
     let shares: Vec<FE> = serde_json::from_str(&shares).unwrap();
     let R_x = BigUint::from_str_radix(R_x,16).unwrap();
     let R_y = BigUint::from_str_radix(R_y, 16).unwrap();
@@ -84,12 +87,17 @@ pub fn combine_signature_internal(
     R_y: BigInt,
     s_vec: &Vec<FE>,
 ) -> SignatureRecid {
+    // to print the shares for debugging
+    // console::log_1(&"combine_signature_internal".into());
+    // for (idx, s) in s_vec.iter().enumerate() {
+    //     console::log_2(&idx.into(), &s.to_big_int().to_str_radix(16).into());
+    // }
 
     // reduce -> but what about reference?
-    let init = s_vec[0].clone();    
-    //console::log_2(&"2:".into(), &init.to_big_int().to_str_radix(16).into() );
+    let init = s_vec[0].clone();  
+    // console::log_2(&"init:".into(), &init.to_big_int().to_str_radix(16).into() );
     let mut s = s_vec.iter().skip(1).fold(init, |acc, x| acc + x);
-
+    
     let s_bn = s.to_big_int();
     let r: FE = ECScalar::from(&R_x.mod_floor(&FE::q())); // q is the group order for the Secp256k1 curve.
     let ry: BigInt = R_y.mod_floor(&FE::q());
