@@ -435,7 +435,7 @@ async function init(input) {    const imports = {};
         return ret;
     };
     imports.wbg.__wbg_require_edfaedd93e302925 = function() { return handleError(function (arg0, arg1, arg2) {
-        var ret = getObject(arg0).require(getStringFromWasm0(arg1, arg2));
+        var ret = require(getStringFromWasm0(arg1, arg2));
         return addHeapObject(ret);
     }, arguments) };
     imports.wbg.__wbg_crypto_2bc4d5b05161de5b = function(arg0) {

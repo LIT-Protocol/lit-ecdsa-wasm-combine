@@ -138,6 +138,22 @@ to_remove_from_wasm_bridge = [
 
 ]
 
+# find to_find_and_replace[0] and replace with to_find_and_replace[1]
+to_find_and_replace = [
+"""
+    imports.wbg.__wbg_require_edfaedd93e302925 = function() { return handleError(function (arg0, arg1, arg2) {
+        var ret = getObject(arg0).require(getStringFromWasm0(arg1, arg2));
+        return addHeapObject(ret);
+    }, arguments) };
+""",
+"""
+    imports.wbg.__wbg_require_edfaedd93e302925 = function() { return handleError(function (arg0, arg1, arg2) {
+        var ret = require(getStringFromWasm0(arg1, arg2));
+        return addHeapObject(ret);
+    }, arguments) };
+"""
+]
+
 scripts = [
     'constants.js',
     'convert.js',
@@ -151,6 +167,7 @@ for script in scripts:
     if script == '../pkg/ecdsa_wasm.js':
         for to_remove in to_remove_from_wasm_bridge:
             scriptContent = scriptContent.replace(to_remove, '')
+        scriptContent = scriptContent.replace(to_find_and_replace[0], to_find_and_replace[1])
         # make methods private in JSdoc
         scriptContent = scriptContent.replace("/**", "/**\n* @private")
 
