@@ -6,6 +6,7 @@ use rand::thread_rng;
 use num_bigint::BigInt as BN;
 use num_bigint::RandBigInt;
 use num_bigint::ToBigInt;
+
 use num_traits::cast::ToPrimitive;
 use num_traits::identities::Zero;
 use num_traits::Num;
@@ -163,7 +164,12 @@ impl BitManipulation for BigUint {
     }
 
     fn test_bit(self: &Self, _bit: usize) -> bool {
-        return true; //stub
+        let one = BigInt::from(1 as u16);
+        let one_shl = &one.shl(_bit).clone();
+        let one = BigInt::from(1 as u16);
+        self.bitand(one_shl) == one
+
+        //        return true; //stub
     }
 }
 
