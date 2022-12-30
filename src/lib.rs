@@ -76,9 +76,6 @@ pub fn combine_signature(R_x: &str, R_y: &str, shares: &str) -> String {
         shares.push( FE::from_bytes_reduced(bytes) );
     }
 
-    
-
-    // let shares: Vec<FE> = serde_json::from_str(&shares).unwrap();
     let R_x = BigInt::from_str_radix(R_x,16).unwrap();
     println!("R_x: {}", R_x );
     let R_y = BigInt::from_str_radix(R_y, 16).unwrap();
@@ -105,35 +102,24 @@ pub fn combine_signature_internal(
     local_y: BigInt,
     s_vec: &Vec<FE>,
 ) -> SignatureRecid {
-    // to print the shares for debugging
-    // console::log_1(&"combine_signature_internal".into());
-    // for (idx, s) in s_vec.iter().enumerate() {
-    //     console::log_2(&idx.into(), &s.to_big_int().to_str_radix(16).into());
-    // }
-
-    println!("local_x : {}", local_x);
-    println!("local_y : {}", local_y);
+   
+    // println!("local_x : {}", local_x);
+    // println!("local_y : {}", local_y);
 
     let q = BigInt::from_bytes_be(CURVE_ORDER.as_ref());
     // reduce -> but what about reference?
     let init = s_vec[0].clone();  
-    // console::log_2(&"init:".into(), &init.to_big_int().to_str_radix(16).into() );
     let mut s = s_vec.iter().skip(1).fold(init, |acc, x| acc + x);
     
-    // let s_bn = s.to_big_int();
     let s_bn = BigInt::from_bytes_be(&s.to_bytes());
 
-    let binding = local_x.mod_floor(&q).to_bytes_be();
-    let x_m_f = binding.as_slice();
-    let r: FE =  FE::from_bytes_reduced( FieldBytes::from_slice(x_m_f) );
-    // let r: FE = ECScalar::from(&local_x.mod_floor(&FE::q())); // q is the group order for the Secp256k1 curve.
+    let x_mode_floor_vec = local_x.mod_floor(&q).to_bytes_be();
+    let x_mod_floor = x_mode_floor_vec.as_slice();
+    let r: FE =  FE::from_bytes_reduced( FieldBytes::from_slice(x_mod_floor) );
    
-
-
-    let ry: BigInt = local_y.mod_floor(&q);
+    let _ry: BigInt = local_y.mod_floor(&q);
     
     // Calculate recovery id
-    // let is_ry_odd = local_y.test_bit(0);
     let is_ry_odd = test_bit(local_y, 0);
     
     let mut recid = if is_ry_odd { 1 } else { 0 };    
@@ -141,21 +127,19 @@ pub fn combine_signature_internal(
     let s_tag_bn = q - &s_bn;
     
     if s_bn > s_tag_bn {
-        //s = ECScalar::from(&s_tag_bn);
         s = FE::from_bytes_reduced(FieldBytes::from_slice(&s_tag_bn.to_bytes_be()));
         recid ^= 1;
     }
 
-
     SignatureRecid { r, s, recid }
-
 }
 
 
 
  #[cfg(test)]
+ #[allow(non_snake_case)]
  mod tests {
-
+    
     use crate::combine_signature;
     
     // What are these tests?   
@@ -201,7 +185,7 @@ pub fn combine_signature_internal(
 
     #[test]
     fn verify_signature() {
-        use k256::ecdsa::Signature;
+       // use k256::ecdsa::Signature;
 
         // let sig = Signature {
         //     bytes: todo!(),
