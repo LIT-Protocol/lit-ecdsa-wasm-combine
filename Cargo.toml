@@ -31,8 +31,9 @@ num-traits = "0.2.6"
 # hmac = "0.12.1"
 # hmac = "0.7"
 zeroize = "0.5.2"
-libsecp256k1 = { version = "0.3.3", default-features = false }
-
+libsecp256k1 = "0.3"
+k256 = "0.9.5"
+hex = "0.4.3"
 # [dependencies.rand]
 # getrandom = { version = "0.2", features = ["js"] }
 
