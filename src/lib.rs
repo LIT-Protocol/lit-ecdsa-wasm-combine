@@ -2,6 +2,10 @@ extern crate wasm_bindgen;
 extern crate web_sys;
 extern crate console_error_panic_hook;
 
+use k256::AffinePoint;
+use k256::PublicKey;
+use k256::ecdsa::VerifyingKey;
+use k256::elliptic_curve::generic_array::GenericArray;
 use num_traits::Num;
 use rand::AsByteSliceMut;
 use wasm_bindgen::prelude::*;
@@ -70,10 +74,11 @@ pub fn combine_signature(R_x: &str, R_y: &str, shares: &str) -> String {
     let mut shares: Vec<FE>  = Vec::new();
 
     for share in shares_raw {
-        let mut slice = hex::decode(&share).unwrap();
-        let slice = slice.as_byte_slice_mut();
-        let bytes = FieldBytes::from_mut_slice(slice);
-        shares.push( FE::from_bytes_reduced(bytes) );
+        // let mut slice = hex::decode(&share).unwrap();
+        // let slice = slice.as_byte_slice_mut();
+        // let bytes = FieldBytes::from_mut_slice(slice);
+        // shares.push( FE::from_bytes_reduced(bytes) );
+        shares.push( hex_to_scalar( &share).unwrap());
     }
 
     let R_x = BigInt::from_str_radix(R_x,16).unwrap();
@@ -96,6 +101,38 @@ pub fn combine_signature(R_x: &str, R_y: &str, shares: &str) -> String {
     serde_json::to_string(&sigHex).unwrap()
 }
 
+pub fn hex_to_scalar(hex_val: &str) -> Result<FE, ()> {
+
+    let mut slice = hex::decode(hex_val).unwrap();
+        let slice = slice.as_byte_slice_mut();
+        let bytes = FieldBytes::from_mut_slice(slice);
+
+        Ok( FE::from_bytes_reduced(bytes))
+}
+
+pub fn hex_to_pubkey(hex_val: &str) -> Result<PublicKey, ()> {
+    let mut slice = hex::decode(hex_val).unwrap();
+    let bytes = slice.as_byte_slice_mut();
+    let pubkey =     PublicKey::from_sec1_bytes(bytes).expect("Error decoding pubkey from bytes");
+    Ok(pubkey)
+}
+
+pub fn hex_to_verifying_key(hex_val: &str) -> Result<VerifyingKey, ()> {
+    let mut slice = hex::decode(hex_val).unwrap();
+    let bytes = slice.as_byte_slice_mut();
+    let pubkey =     VerifyingKey::from_sec1_bytes(bytes).expect("Error decoding verifying key from bytes");
+    Ok(pubkey)
+}
+
+// pub fn hex_to_digest_array(hex_val: &str) -> Result<bool, () >
+// {
+    
+//     let mut slice = hex::decode(hex_val).unwrap();
+//     let slice = slice.as_byte_slice_mut();
+
+
+//     Ok(true)
+// }
 
 pub fn combine_signature_internal(
     local_x: BigInt,
@@ -141,18 +178,34 @@ pub fn combine_signature_internal(
  mod tests {
     
     use crate::combine_signature;
+    // use crate::hex_to_pubkey;
+    use crate::hex_to_scalar;
+    use crate::SignatureRecidHex;
+    use crate::hex_to_verifying_key;
+    use k256::ecdsa::Signature;
+    // use k256::ecdsa::signature::DigestVerifier;
+    use k256::ecdsa::signature::Verifier;
     
     // What are these tests?   
     // The data below is pulled from the console output generated when running tests in the LIT node code.  
     // The values have been valided inside thoses tests, but we could probably do a clearer test with actual primitives!
     #[test]
-    fn simple_sign_test() {
+    fn simple_sign_test_10_of_10() {
     
         let R_x = "63a62e7c00f34a9de2fb55c99e672bb347b23b75991f4217dfbe31a09b627b22";
 
         let R_y = "1a87eb5a02a91ba8ae27ed404bae489de2616dab6f65894294e42a1022b0fdfe"; 
 
-        let s_vec = "[\"4e52aeaed3e2e07977e2d0271b0ba4d8ecaa92aad7574496c5c51aa99a1fd1a1\" ,\"4f300a5d03a85c88bc7d85d5b29b3cd608c1fa1146c41d170f65e750f9ea0264\",\"95b1b520b25addae748e4f1cbf2c79afcef578da3285c8de71df35ba77d9930d\",\"c323d0f7f0626e62175539607a4205695dad2ce9362398390808a64acfc92c1f\",\"49263cfa45c1a1fd9e57e0e9a5afa7435c588e37a9c811809aa7feccf08a21a9\",\"ebd46fde3c122047f883efca7d5557e18b0f99543a8e4e1f88e69771b53a2648\",\"74e96f26cbc17cacee056abf4d822f76d8ad0829f6a230d8ddc239e4e1a1eef5\",\"87d1c86bdf1c82e6d887da3b10b26d51d33693ede49f4d0391d74a2266eb1e94\",\"aff1748ee300f71d07acd1a488a4af55ea6b5abcdd7e4b43dcd42536f3e3e7c9\",\"1b7b48af435ad3a8ee722795bc2aba16a7e92fe3a882e47664d1beb644b88de7\"]";
+        let s_vec = "[\"4e52aeaed3e2e07977e2d0271b0ba4d8ecaa92aad7574496c5c51aa99a1fd1a1\" ,
+            \"4f300a5d03a85c88bc7d85d5b29b3cd608c1fa1146c41d170f65e750f9ea0264\",
+            \"95b1b520b25addae748e4f1cbf2c79afcef578da3285c8de71df35ba77d9930d\",
+            \"c323d0f7f0626e62175539607a4205695dad2ce9362398390808a64acfc92c1f\",
+            \"49263cfa45c1a1fd9e57e0e9a5afa7435c588e37a9c811809aa7feccf08a21a9\",
+            \"ebd46fde3c122047f883efca7d5557e18b0f99543a8e4e1f88e69771b53a2648\",
+            \"74e96f26cbc17cacee056abf4d822f76d8ad0829f6a230d8ddc239e4e1a1eef5\",
+            \"87d1c86bdf1c82e6d887da3b10b26d51d33693ede49f4d0391d74a2266eb1e94\",
+            \"aff1748ee300f71d07acd1a488a4af55ea6b5abcdd7e4b43dcd42536f3e3e7c9\",
+            \"1b7b48af435ad3a8ee722795bc2aba16a7e92fe3a882e47664d1beb644b88de7\"]";
 
         let result = combine_signature(R_x, R_y,  s_vec);
 
@@ -166,6 +219,9 @@ pub fn combine_signature_internal(
     #[test]
     fn simple_sign_test_2_of_3_with_pkp() {
     
+        // let message = "Lit Protocol Rocks!"; //.to_string(); //.into_bytes();
+        // let hex_pubkey = "045f6043924d928c544b0f4ace27913e9f9823fe6319c109b36acace12f5e338c3a0081aa220e23337aac219bbe84f278e428ee882e6661842f31e24ea46a34c02";
+        // let digest = "4c69742050726f746f636f6c20526f636b7321";
         let R_x = "f485c4485a59a2c6854b9cd9b04d071f65e8fd009885834a1368670d79ec96c7";
 
         let R_y = "9e378f07d922a06a1c1ca1ef1e8458f27f5e9c004f78a51ccc86a46368259bb2"; 
@@ -179,19 +235,40 @@ pub fn combine_signature_internal(
 
         assert_eq!(
             result, "{\"r\":\"f485c4485a59a2c6854b9cd9b04d071f65e8fd009885834a1368670d79ec96c7\",\"s\":\"2a7d1ea2170b3a9f122b3924dce0842e092751750bd1887931c5bdf04e7e97d2\",\"recid\":0}"
-        
         );
+
+        let _sig : SignatureRecidHex = serde_json::from_str(&result).expect("Error decoding r,s,recId to signature");
+
+       // assert_eq!(verify_signature(msg, &sig.r, &sig.s, &hex_pubkey).unwrap(), true);
+
+
     }
 
-    #[test]
-    fn verify_signature() {
-       // use k256::ecdsa::Signature;
 
-        // let sig = Signature {
-        //     bytes: todo!(),
-        // };
-
+    fn verify_signature(msg: &str, hex_r: &str, hex_s: &str, hex_pubkey: &str) -> Result<bool, ()> {
         
+        let r = hex_to_scalar(hex_r).unwrap();
+        let s = hex_to_scalar(hex_s).unwrap();
+
+        let msg = msg.as_ref();
+
+        let sig = Signature::from_scalars(r, s).unwrap();
+        
+        let verifying_key = hex_to_verifying_key(hex_pubkey).unwrap();
+        
+
+        let result = verifying_key.verify(msg, &sig);
+        
+        if result.is_err() {
+            println!("{:?} \n {:?} \n {:?}", sig, verifying_key, &result.unwrap_err());
+            
+            return Ok(false);
+        }
+        
+
+        Ok(true)
+        
+
     }
 
  }
