@@ -109,6 +109,12 @@ pub fn hex_to_scalar(hex_val: &str) -> Result<FE, ()> {
 
 #[doc = "Converts hex strings to Public Keys as defined in RustCrypto's K256 crate."]
 pub fn hex_to_pubkey(hex_val: &str) -> Result<PublicKey, ()> {
+    
+     let mut hex_val = hex_val.to_string();
+    if hex_val.len() % 2 == 1 {
+        // if length is odd, add a zero at the front
+        hex_val.insert(0, '0');
+    }
     let mut slice = hex::decode(hex_val).unwrap();
     let bytes = slice.as_byte_slice_mut();
     let pubkey = PublicKey::from_sec1_bytes(bytes).expect("Error decoding pubkey from bytes");
@@ -117,6 +123,11 @@ pub fn hex_to_pubkey(hex_val: &str) -> Result<PublicKey, ()> {
 
 #[doc = "Converts hex strings to Verifiying Keys as defined in RustCrypto's K256 crate."]
 pub fn hex_to_verifying_key(hex_val: &str) -> Result<VerifyingKey, ()> {
+     let mut hex_val = hex_val.to_string();
+    if hex_val.len() % 2 == 1 {
+        // if length is odd, add a zero at the front
+        hex_val.insert(0, '0');
+    }
     let mut slice = hex::decode(hex_val).unwrap();
     let bytes = slice.as_byte_slice_mut();
     let pubkey =
@@ -140,8 +151,17 @@ pub fn combine_signature_internal(
 
     let s_bn = BigInt::from_bytes_be(&s.to_bytes());
 
-    let x_mode_floor_vec = local_x.mod_floor(&q).to_bytes_be();
+    let mut x_mode_floor_vec = local_x.mod_floor(&q).to_bytes_be();
+    // if x_mode_floor_vec.len()  is odd prepend a zero
+    if x_mode_floor_vec.len() % 2 == 1 {
+        let mut x_mod_floor = vec![0];
+        x_mod_floor.extend_from_slice(&x_mode_floor_vec);
+        x_mode_floor_vec = x_mod_floor;
+    }
+
     let x_mod_floor = x_mode_floor_vec.as_slice();
+    
+    
     let r: FE = FE::from_bytes_reduced(FieldBytes::from_slice(x_mod_floor));
 
     let _ry: BigInt = local_y.mod_floor(&q);
