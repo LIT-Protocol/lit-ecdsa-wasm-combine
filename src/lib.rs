@@ -1,40 +1,39 @@
+extern crate console_error_panic_hook;
 extern crate wasm_bindgen;
 extern crate web_sys;
-extern crate console_error_panic_hook;
 
-use k256::PublicKey;
 use k256::ecdsa::VerifyingKey;
+use k256::PublicKey;
+use num_bigint::BigUint as BigInt;
 use num_traits::Num;
 use rand::AsByteSliceMut;
-use wasm_bindgen::prelude::*;
 use std::ops::BitAnd;
 use std::ops::Shl;
 use std::panic;
-use num_bigint::BigUint as BigInt;
+use wasm_bindgen::prelude::*;
 
-// 
+//
 pub const CURVE_ORDER: [u8; 32] = [
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe,
     0xba, 0xae, 0xdc, 0xe6, 0xaf, 0x48, 0xa0, 0x3b, 0xbf, 0xd2, 0x5e, 0x8c, 0xd0, 0x36, 0x41, 0x41,
 ];
 
- #[macro_use]
+#[macro_use]
 extern crate serde_derive;
 extern crate serde;
 extern crate serde_json;
 
+extern crate k256;
 extern crate num_bigint;
 extern crate num_integer;
 extern crate num_traits;
 extern crate rand;
-extern crate k256;
 
-
-use k256::Scalar as FE;  // Field Element
 use k256::FieldBytes;
+use k256::Scalar as FE; // Field Element
 use num_integer::Integer;
 
-#[derive(Clone, PartialEq, Debug,)]
+#[derive(Clone, PartialEq, Debug)]
 struct Signature {
     pub r: FE,
     pub s: FE,
@@ -47,7 +46,7 @@ pub struct SignatureRecid {
     pub recid: u8,
 }
 
-#[derive(Clone,Debug,Serialize,Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SignatureRecidHex {
     pub r: String,
     pub s: String,
@@ -67,29 +66,27 @@ fn test_bit(val: BigInt, _bit: usize) -> bool {
 #[doc = "Entry point for recombining signatures."]
 pub fn combine_signature(R_x: &str, R_y: &str, shares: &str) -> String {
     panic::set_hook(Box::new(console_error_panic_hook::hook));
-    
-    let shares_raw : Vec<String> = serde_json::from_str(&shares).unwrap();
-    let mut shares: Vec<FE>  = Vec::new();
+
+    let shares_raw: Vec<String> = serde_json::from_str(&shares).unwrap();
+    let mut shares: Vec<FE> = Vec::new();
 
     for share in shares_raw {
-        shares.push( hex_to_scalar( &share).unwrap());
+        if share.len() > 1 {
+            shares.push(hex_to_scalar(&share).unwrap());
+        }
     }
 
-    let R_x = BigInt::from_str_radix(R_x,16).unwrap();
-    println!("R_x: {}", R_x );
+    let R_x = BigInt::from_str_radix(R_x, 16).unwrap();
+    println!("R_x: {}", R_x);
     let R_y = BigInt::from_str_radix(R_y, 16).unwrap();
-    println!("R_y: {}", R_y );
+    println!("R_y: {}", R_y);
 
-    let sig = combine_signature_internal(        
-        R_x,
-        R_y,
-        &shares,
-    );
-    
+    let sig = combine_signature_internal(R_x, R_y, &shares);
+
     let sigHex = SignatureRecidHex {
-        r:  hex::encode( &sig.r.to_bytes() ),
-        s: hex::encode( &sig.s.to_bytes() ),
-        recid : sig.recid
+        r: hex::encode(&sig.r.to_bytes()),
+        s: hex::encode(&sig.s.to_bytes()),
+        recid: sig.recid,
     };
 
     serde_json::to_string(&sigHex).unwrap()
@@ -97,19 +94,24 @@ pub fn combine_signature(R_x: &str, R_y: &str, shares: &str) -> String {
 
 #[doc = "Converts hex strings to Scalers as defined in RustCrypto's K256 crate."]
 pub fn hex_to_scalar(hex_val: &str) -> Result<FE, ()> {
+    let mut hex_val = hex_val.to_string();
+    if hex_val.len() % 2 == 1 {
+        // if length is odd, add a zero at the front
+        hex_val.insert(0, '0');
+    }
+
     let mut slice = hex::decode(hex_val).unwrap();
-        let slice = slice.as_byte_slice_mut();
-        let bytes = FieldBytes::from_mut_slice(slice);
+    let slice = slice.as_byte_slice_mut();
+    let bytes = FieldBytes::from_mut_slice(slice);
 
-        Ok( FE::from_bytes_reduced(bytes))
+    Ok(FE::from_bytes_reduced(bytes))
 }
-
 
 #[doc = "Converts hex strings to Public Keys as defined in RustCrypto's K256 crate."]
 pub fn hex_to_pubkey(hex_val: &str) -> Result<PublicKey, ()> {
     let mut slice = hex::decode(hex_val).unwrap();
     let bytes = slice.as_byte_slice_mut();
-    let pubkey =     PublicKey::from_sec1_bytes(bytes).expect("Error decoding pubkey from bytes");
+    let pubkey = PublicKey::from_sec1_bytes(bytes).expect("Error decoding pubkey from bytes");
     Ok(pubkey)
 }
 
@@ -117,7 +119,8 @@ pub fn hex_to_pubkey(hex_val: &str) -> Result<PublicKey, ()> {
 pub fn hex_to_verifying_key(hex_val: &str) -> Result<VerifyingKey, ()> {
     let mut slice = hex::decode(hex_val).unwrap();
     let bytes = slice.as_byte_slice_mut();
-    let pubkey =     VerifyingKey::from_sec1_bytes(bytes).expect("Error decoding verifying key from bytes");
+    let pubkey =
+        VerifyingKey::from_sec1_bytes(bytes).expect("Error decoding verifying key from bytes");
     Ok(pubkey)
 }
 
@@ -127,30 +130,29 @@ pub fn combine_signature_internal(
     local_y: BigInt,
     s_vec: &Vec<FE>,
 ) -> SignatureRecid {
-   
     // println!("local_x : {}", local_x);
     // println!("local_y : {}", local_y);
 
     let q = BigInt::from_bytes_be(CURVE_ORDER.as_ref());
     // reduce -> but what about reference?
-    let init = s_vec[0].clone();  
+    let init = s_vec[0].clone();
     let mut s = s_vec.iter().skip(1).fold(init, |acc, x| acc + x);
-    
+
     let s_bn = BigInt::from_bytes_be(&s.to_bytes());
 
     let x_mode_floor_vec = local_x.mod_floor(&q).to_bytes_be();
     let x_mod_floor = x_mode_floor_vec.as_slice();
-    let r: FE =  FE::from_bytes_reduced( FieldBytes::from_slice(x_mod_floor) );
-   
+    let r: FE = FE::from_bytes_reduced(FieldBytes::from_slice(x_mod_floor));
+
     let _ry: BigInt = local_y.mod_floor(&q);
-    
+
     // Calculate recovery id
     let is_ry_odd = test_bit(local_y, 0);
-    
-    let mut recid = if is_ry_odd { 1 } else { 0 };    
-    
+
+    let mut recid = if is_ry_odd { 1 } else { 0 };
+
     let s_tag_bn = q - &s_bn;
-    
+
     if s_bn > s_tag_bn {
         s = FE::from_bytes_reduced(FieldBytes::from_slice(&s_tag_bn.to_bytes_be()));
         recid ^= 1;
@@ -159,25 +161,22 @@ pub fn combine_signature_internal(
     SignatureRecid { r, s, recid }
 }
 
-
-
- #[cfg(test)]
- #[allow(non_snake_case)]
- mod tests {    
+#[cfg(test)]
+#[allow(non_snake_case)]
+mod tests {
     use crate::combine_signature;
     use crate::hex_to_scalar;
-    use crate::SignatureRecidHex;
     use crate::hex_to_verifying_key;
-    use k256::ecdsa::Signature;
+    use crate::SignatureRecidHex;
     use k256::ecdsa::signature::Verifier;
-    
+    use k256::ecdsa::Signature;
+
     #[test]
     #[doc = "Test using a threshold of 10 of 10 sig shares."]
     fn simple_sign_test_10_of_10() {
-    
         // rX, rY & s_vec are the raw values coming from the nodes
         let R_x = "63a62e7c00f34a9de2fb55c99e672bb347b23b75991f4217dfbe31a09b627b22";
-        let R_y = "1a87eb5a02a91ba8ae27ed404bae489de2616dab6f65894294e42a1022b0fdfe"; 
+        let R_y = "1a87eb5a02a91ba8ae27ed404bae489de2616dab6f65894294e42a1022b0fdfe";
         let s_vec = "[\"4e52aeaed3e2e07977e2d0271b0ba4d8ecaa92aad7574496c5c51aa99a1fd1a1\" ,
             \"4f300a5d03a85c88bc7d85d5b29b3cd608c1fa1146c41d170f65e750f9ea0264\",
             \"95b1b520b25addae748e4f1cbf2c79afcef578da3285c8de71df35ba77d9930d\",
@@ -189,7 +188,7 @@ pub fn combine_signature_internal(
             \"aff1748ee300f71d07acd1a488a4af55ea6b5abcdd7e4b43dcd42536f3e3e7c9\",
             \"1b7b48af435ad3a8ee722795bc2aba16a7e92fe3a882e47664d1beb644b88de7\"]";
 
-        let result = combine_signature(R_x, R_y,  s_vec);
+        let result = combine_signature(R_x, R_y, s_vec);
 
         // this assertation uses known results from node tests (not currently Rust Crypto libs)
         assert_eq!(
@@ -198,86 +197,82 @@ pub fn combine_signature_internal(
         );
     }
 
-
     #[test]
     #[doc = "Test using a threshold of 2 of 3 sig shares."]
     fn simple_sign_test_2_of_3_with_pkp() {
-    
         // rX, rY & s_vec are the raw values coming from the nodes
         let R_x = "f485c4485a59a2c6854b9cd9b04d071f65e8fd009885834a1368670d79ec96c7";
-        let R_y = "9e378f07d922a06a1c1ca1ef1e8458f27f5e9c004f78a51ccc86a46368259bb2"; 
+        let R_y = "9e378f07d922a06a1c1ca1ef1e8458f27f5e9c004f78a51ccc86a46368259bb2";
         let s_vec = "[
             \"304b56d7e5fb1d8837f443089bf03fdae99501aa52c7e2973ac2687356ca176b\",
             \"fa31c7ca31101d16da36f61c40f04451da412cb16852461db6d5b409c7eac1a8\"
             ]";
 
-        let result = combine_signature(R_x, R_y,  s_vec);
+        let result = combine_signature(R_x, R_y, s_vec);
 
         // this assertation uses known results from node tests (not currently Rust Crypto libs)
         assert_eq!(
             result, "{\"r\":\"f485c4485a59a2c6854b9cd9b04d071f65e8fd009885834a1368670d79ec96c7\",\"s\":\"2a7d1ea2170b3a9f122b3924dce0842e092751750bd1887931c5bdf04e7e97d2\",\"recid\":0}"
         );
-
     }
     #[test]
     #[doc = "Test using a threshold of 2 of 3 sig shares, and comparing results to Rust Crypto's verification system."]
 
     fn simple_sign_test_2_of_3_with_pkp_extended() {
-    
         // msg & pubkey will be used for an ECDSA verify from Rust Crypto crate
-        let msg = "Lit Protocol Rocks!"; 
+        let msg = "Lit Protocol Rocks!";
         let hex_pubkey = "045f6043924d928c544b0f4ace27913e9f9823fe6319c109b36acace12f5e338c3a0081aa220e23337aac219bbe84f278e428ee882e6661842f31e24ea46a34c02";
-        
+
         // rX, rY & s_vec are the raw values coming from the nodes
         let R_x = "37bf1e617d138d25c482959ef754103c3127190a6a1013ec178d261967e6dec8";
-        let R_y = "a9d2c1eb4f6e5e15c315c4b724bf215ccbb0c619a163d4d4f0960e891fecc816"; 
+        let R_y = "a9d2c1eb4f6e5e15c315c4b724bf215ccbb0c619a163d4d4f0960e891fecc816";
         let s_vec = "[
             \"c6e6a8ef8e8df094767be4e8ad37403e9def8d0ee90eb01bcccc7c664192710d\",
             \"e354a624e0bc3c3ea5d0958984576b667262fb4d80e7e4eb9d78508772572efd\"
             ]";
 
-        let result = combine_signature(R_x, R_y,  s_vec);
+        let result = combine_signature(R_x, R_y, s_vec);
 
         // this assertation uses known results from node tests (not currently Rust Crypto libs)
         assert_eq!(
             result, "{\"r\":\"37bf1e617d138d25c482959ef754103c3127190a6a1013ec178d261967e6dec8\",\"s\":\"55c4b0eb90b5d32ce3b3858dce715458650b3170f49aab70155ff02bec82e278\",\"recid\":1}"
         );
 
-        let sig : SignatureRecidHex = serde_json::from_str(&result).expect("Error decoding r,s,recId to signature");
+        let sig: SignatureRecidHex =
+            serde_json::from_str(&result).expect("Error decoding r,s,recId to signature");
         // this assertation uses the Rust Crypto verification
-       assert_eq!(verify_signature(msg, &sig.r, &sig.s, &hex_pubkey).unwrap(), true);
+        assert_eq!(
+            verify_signature(msg, &sig.r, &sig.s, &hex_pubkey).unwrap(),
+            true
+        );
     }
 
     fn verify_signature(msg: &str, hex_r: &str, hex_s: &str, hex_pubkey: &str) -> Result<bool, ()> {
-        
         let r = hex_to_scalar(hex_r).unwrap();
         let s = hex_to_scalar(hex_s).unwrap();
 
         let msg = msg.as_ref();
 
         let sig = Signature::from_scalars(r, s).unwrap();
-        
-        let verifying_key = hex_to_verifying_key(hex_pubkey).unwrap();        
+
+        let verifying_key = hex_to_verifying_key(hex_pubkey).unwrap();
 
         // works if message is properly hashed - in this case sha2{256}
         let result = verifying_key.verify(msg, &sig);
-        
+
         if result.is_err() {
-            println!("{:?} \n {:?} \n {:?}", sig, verifying_key, &result.unwrap_err());        
+            println!(
+                "{:?} \n {:?} \n {:?}",
+                sig,
+                verifying_key,
+                &result.unwrap_err()
+            );
             return Ok(false);
         }
-        
 
         Ok(true)
-        
-
     }
-
- }
-
-
-
-
+}
 
 // // This is a representation of the GG20 version of recombination.
 
@@ -296,7 +291,6 @@ pub fn combine_signature_internal(
 //      1. id = R.y & 1
 //      2. if (s > curve.q / 2) id = id ^ 1
 //     */
-
 //     let is_ry_odd = ry.test_bit(0);
 //     let mut recid = if is_ry_odd { 1 } else { 0 };
 //     let s_tag_bn = FE::q() - &s_bn;
