@@ -1,348 +1,350 @@
+extern crate console_error_panic_hook;
 extern crate wasm_bindgen;
 extern crate web_sys;
-extern crate console_error_panic_hook;
 
-use curv::arithmetic::traits::BitManipulation;
-//use num_bigint::BigInt;
+use k256::ecdsa::VerifyingKey;
+use k256::PublicKey;
+use num_bigint::BigUint as BigInt;
 use num_traits::Num;
-use wasm_bindgen::prelude::*;
+use rand::AsByteSliceMut;
+use std::ops::BitAnd;
+use std::ops::Shl;
 use std::panic;
+use wasm_bindgen::prelude::*;
 
-
+//
+pub const CURVE_ORDER: [u8; 32] = [
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe,
+    0xba, 0xae, 0xdc, 0xe6, 0xaf, 0x48, 0xa0, 0x3b, 0xbf, 0xd2, 0x5e, 0x8c, 0xd0, 0x36, 0x41, 0x41,
+];
 
 #[macro_use]
 extern crate serde_derive;
 extern crate serde;
 extern crate serde_json;
 
+extern crate k256;
 extern crate num_bigint;
 extern crate num_integer;
 extern crate num_traits;
-//extern crate rand;
 extern crate rand;
-// extern crate cryptoxide;
 
-pub mod curv;
-
-#[derive(Copy, PartialEq, Eq, Clone, Debug)]
-enum Error {
-    InvalidKey,
-    InvalidSS,
-    InvalidCom,
-    InvalidSig,
-}
-#[derive(Copy, PartialEq, Eq, Clone, Debug)]
-pub enum ErrorKey {
-    InvalidPublicKey,
-}
-
-use curv::arithmetic::num_bigint::BigInt;
-use curv::elliptic::curves::secp256_k1::{  FE, GE, SK}; //, Secp256k1Scalar};
-use curv::elliptic::curves::traits::*;
+use k256::FieldBytes;
+use k256::Scalar as FE; // Field Element
 use num_integer::Integer;
 
-#[derive(Clone, Serialize, Deserialize)]
-struct LocalSignature {
-    pub r: FE,
-    pub R: GE,
-    pub s_i: FE,
-    pub m: BigInt,
-    pub y: GE,
-}
-
-#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Debug)]
 struct Signature {
     pub r: FE,
     pub s: FE,
 }
 
-#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct SignatureRecid {
     pub r: FE,
     pub s: FE,
     pub recid: u8,
 }
 
-//use web_sys::console;   // for logging to the JS console
-
-#[wasm_bindgen]
-pub fn combine_signature(R_x: &str, R_y: &str, shares: &str) -> String {
-    panic::set_hook(Box::new(console_error_panic_hook::hook));
-    
-    let shares: Vec<FE> = serde_json::from_str(&shares).unwrap();
-    let R_x = BigInt::from_str_radix(R_x,16).unwrap();
-    println!("R_x: {}", R_x );
-    let R_y = BigInt::from_str_radix(R_y, 16).unwrap();
-    println!("R_y: {}", R_y );
-
-    let sig = combine_signature_internal(        
-        R_x,
-        R_y,
-        &shares,
-    );
-    serde_json::to_string(&sig).unwrap()
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SignatureRecidHex {
+    pub r: String,
+    pub s: String,
+    pub recid: u8,
 }
 
+//use web_sys::console;   // for logging to the JS console
+#[doc = "Tests a bit of a bigint."]
+fn test_bit(val: BigInt, _bit: usize) -> bool {
+    let one = BigInt::from(1 as u16);
+    let one_shl = &one.shl(_bit).clone();
+    let one = BigInt::from(1 as u16);
+    val.bitand(one_shl) == one
+}
+#[allow(non_snake_case)]
+#[wasm_bindgen]
+#[doc = "Entry point for recombining signatures."]
+pub fn combine_signature(R_x: &str, R_y: &str, shares: &str) -> String {
+    panic::set_hook(Box::new(console_error_panic_hook::hook));
 
+    let shares_raw: Vec<String> = serde_json::from_str(&shares).unwrap();
+    let mut shares: Vec<FE> = Vec::new();
+
+    for share in shares_raw {
+        if share.len() > 1 {
+            shares.push(hex_to_scalar(&share).unwrap());
+        }
+    }
+
+    let R_x = BigInt::from_str_radix(R_x, 16).unwrap();
+    println!("R_x: {}", R_x);
+    let R_y = BigInt::from_str_radix(R_y, 16).unwrap();
+    println!("R_y: {}", R_y);
+
+    let sig = combine_signature_internal(R_x, R_y, &shares);
+
+    let sigHex = SignatureRecidHex {
+        r: hex::encode(&sig.r.to_bytes()),
+        s: hex::encode(&sig.s.to_bytes()),
+        recid: sig.recid,
+    };
+
+    serde_json::to_string(&sigHex).unwrap()
+}
+
+#[doc = "Converts hex strings to Scalers as defined in RustCrypto's K256 crate."]
+pub fn hex_to_scalar(hex_val: &str) -> Result<FE, ()> {
+    let mut hex_val = hex_val.to_string();
+    if hex_val.len() % 2 == 1 {
+        // if length is odd, add a zero at the front
+        hex_val.insert(0, '0');
+    }
+
+    let mut slice = hex::decode(hex_val).unwrap();
+    let slice = slice.as_byte_slice_mut();
+    let bytes = FieldBytes::from_mut_slice(slice);
+
+    Ok(FE::from_bytes_reduced(bytes))
+}
+
+#[doc = "Converts hex strings to Public Keys as defined in RustCrypto's K256 crate."]
+pub fn hex_to_pubkey(hex_val: &str) -> Result<PublicKey, ()> {
+    
+     let mut hex_val = hex_val.to_string();
+    if hex_val.len() % 2 == 1 {
+        // if length is odd, add a zero at the front
+        hex_val.insert(0, '0');
+    }
+    let mut slice = hex::decode(hex_val).unwrap();
+    let bytes = slice.as_byte_slice_mut();
+    let pubkey = PublicKey::from_sec1_bytes(bytes).expect("Error decoding pubkey from bytes");
+    Ok(pubkey)
+}
+
+#[doc = "Converts hex strings to Verifiying Keys as defined in RustCrypto's K256 crate."]
+pub fn hex_to_verifying_key(hex_val: &str) -> Result<VerifyingKey, ()> {
+     let mut hex_val = hex_val.to_string();
+    if hex_val.len() % 2 == 1 {
+        // if length is odd, add a zero at the front
+        hex_val.insert(0, '0');
+    }
+    let mut slice = hex::decode(hex_val).unwrap();
+    let bytes = slice.as_byte_slice_mut();
+    let pubkey =
+        VerifyingKey::from_sec1_bytes(bytes).expect("Error decoding verifying key from bytes");
+    Ok(pubkey)
+}
+
+#[doc = "Basic math required to agregate signature shares and generate the final sig."]
 pub fn combine_signature_internal(
     local_x: BigInt,
     local_y: BigInt,
     s_vec: &Vec<FE>,
 ) -> SignatureRecid {
-    // to print the shares for debugging
-    // console::log_1(&"combine_signature_internal".into());
-    // for (idx, s) in s_vec.iter().enumerate() {
-    //     console::log_2(&idx.into(), &s.to_big_int().to_str_radix(16).into());
-    // }
+    // println!("local_x : {}", local_x);
+    // println!("local_y : {}", local_y);
 
-    println!("local_x : {}", local_x);
-    println!("local_y : {}", local_y);
-
-
+    let q = BigInt::from_bytes_be(CURVE_ORDER.as_ref());
     // reduce -> but what about reference?
-    let init = s_vec[0].clone();  
-    // console::log_2(&"init:".into(), &init.to_big_int().to_str_radix(16).into() );
+    let init = s_vec[0].clone();
     let mut s = s_vec.iter().skip(1).fold(init, |acc, x| acc + x);
-    
-    let s_bn = s.to_big_int();
 
-    let r: FE = ECScalar::from(&local_x.mod_floor(&FE::q())); // q is the group order for the Secp256k1 curve.
-   
-    let ry: BigInt = local_y.mod_floor(&FE::q());
-    
-    // Calculate recovery id
-    let is_ry_odd = local_y.test_bit(0);
-    
-    let mut recid = if is_ry_odd { 1 } else { 0 };    
-    
-    let s_tag_bn = FE::q() - &s_bn;
-    
-    if s_bn > s_tag_bn {
-        s = ECScalar::from(&s_tag_bn);
-        recid ^= 1;
+    let s_bn = BigInt::from_bytes_be(&s.to_bytes());
+
+    let mut x_mode_floor_vec = local_x.mod_floor(&q).to_bytes_be();
+    // if x_mode_floor_vec.len()  is odd prepend a zero
+    if x_mode_floor_vec.len() % 2 == 1 {
+        let mut x_mod_floor = vec![0];
+        x_mod_floor.extend_from_slice(&x_mode_floor_vec);
+        x_mode_floor_vec = x_mod_floor;
     }
 
+    let x_mod_floor = x_mode_floor_vec.as_slice();
+    
+    
+    let r: FE = FE::from_bytes_reduced(FieldBytes::from_slice(x_mod_floor));
+
+    let _ry: BigInt = local_y.mod_floor(&q);
+
+    // Calculate recovery id
+    let is_ry_odd = test_bit(local_y, 0);
+
+    let mut recid = if is_ry_odd { 1 } else { 0 };
+
+    let s_tag_bn = q - &s_bn;
+
+    if s_bn > s_tag_bn {
+        s = FE::from_bytes_reduced(FieldBytes::from_slice(&s_tag_bn.to_bytes_be()));
+        recid ^= 1;
+    }
 
     SignatureRecid { r, s, recid }
-
-}
-
-
-// This is a representation of the GG20 version of recombination.
-
-fn output_signature(ls: &LocalSignature, s_vec: &Vec<FE>) -> Result<SignatureRecid, Error> {
-    let mut s = s_vec.iter().fold(ls.s_i.clone(), |acc, x| acc + x);
-
-    let s_bn = s.to_big_int();
-
-    let r: FE = ECScalar::from(&ls.R.x_coor().unwrap().mod_floor(&FE::q())); // q is the group order for the Secp256k1 curve.
-
-    let ry: BigInt = ls.R.y_coor().unwrap().mod_floor(&FE::q());
-
-    /*
-     Calculate recovery id - it is not possible to compute the public key out of the signature
-     itself. Recovery id is used to enable extracting the public key uniquely.
-     1. id = R.y & 1
-     2. if (s > curve.q / 2) id = id ^ 1
-    */
-
-    let is_ry_odd = ry.test_bit(0);
-    let mut recid = if is_ry_odd { 1 } else { 0 };
-    let s_tag_bn = FE::q() - &s_bn;
-    if s_bn > s_tag_bn {
-        s = ECScalar::from(&s_tag_bn);
-        recid ^= 1;
-    }
-
-    let sig = SignatureRecid { r, s, recid };
-
-    let ver = verify(&sig, &ls.y, &ls.m).is_ok();
-    match ver {
-        true => Ok(sig),
-        false => Err(Error::InvalidSig),
-    }
-}
-
-// verify's the signature - this function brings a lot of additional library overhead into scope
-// and with the inclusion of web3/ethers in the JS side of the SDK, we aren't providing the users with any
-// additional information.
-
-fn verify(sig: &SignatureRecid, y: &GE, message: &BigInt) -> Result<(), Error> {
-    let b = sig.s.invert();
-    let a: FE = ECScalar::from(message);
-    let u1 = a * &b;
-    let u2 = sig.r.clone() * &b;
-
-    let g: GE = ECPoint::generator();
-    let gu1 = &g * &u1;
-    let yu2 = y * &u2;
-    // can be faster using shamir trick
-    if sig.r.clone() == ECScalar::from(&(gu1 + yu2).x_coor().unwrap().mod_floor(&FE::q())) {
-        Ok(())
-    } else {
-        Err(Error::InvalidSig)
-    }
 }
 
 #[cfg(test)]
+#[allow(non_snake_case)]
 mod tests {
-    use std::str::FromStr;
-
-    use num_bigint::BigUint;
-    use num_traits::Num;
-
-    use crate::{
-        combine_signature,
-        curv::elliptic::curves::{
-            secp256_k1::{Secp256k1Point, Secp256k1Scalar, FE},
-            traits::{ECPoint, ECScalar},
-        },
-        output_signature, LocalSignature,
-    };
+    use crate::combine_signature;
+    use crate::hex_to_scalar;
+    use crate::hex_to_verifying_key;
+    use crate::SignatureRecidHex;
+    use k256::ecdsa::signature::Verifier;
+    use k256::ecdsa::Signature;
 
     #[test]
-    fn simple_sign_test() {
-        //let ls = "{\"r\":\"63a62e7c00f34a9de2fb55c99e672bb347b23b75991f4217dfbe31a09b627b22\",\"R\":{\"x\":\"63a62e7c00f34a9de2fb55c99e672bb347b23b75991f4217dfbe31a09b627b22\",\"y\":\"816b4d34f48365ae5df7e965d9c0292531893aa40493bc5c327e6ee39512ef31\"},\"s_i\":\"4e52aeaed3e2e07977e2d0271b0ba4d8ecaa92aad7574496c5c51aa99a1fd1a1\",\"m\":[2825099285,210371760],\"y\":{\"x\":\"bfc168dfb3e09b2899c6829bae5c99025a5d4bab2cb5b2a2b7be176379ad3a2d\",\"y\":\"18e7e02fbac1a28c0057ebb707ccb00b729cd37c0aadd42c883a6ba26581e221\"}}";
+    #[doc = "Test using a threshold of 10 of 10 sig shares."]
+    fn simple_sign_test_10_of_10() {
+        // rX, rY & s_vec are the raw values coming from the nodes
+        let R_x = "63a62e7c00f34a9de2fb55c99e672bb347b23b75991f4217dfbe31a09b627b22";
+        let R_y = "1a87eb5a02a91ba8ae27ed404bae489de2616dab6f65894294e42a1022b0fdfe";
+        let s_vec = "[\"4e52aeaed3e2e07977e2d0271b0ba4d8ecaa92aad7574496c5c51aa99a1fd1a1\" ,
+            \"4f300a5d03a85c88bc7d85d5b29b3cd608c1fa1146c41d170f65e750f9ea0264\",
+            \"95b1b520b25addae748e4f1cbf2c79afcef578da3285c8de71df35ba77d9930d\",
+            \"c323d0f7f0626e62175539607a4205695dad2ce9362398390808a64acfc92c1f\",
+            \"49263cfa45c1a1fd9e57e0e9a5afa7435c588e37a9c811809aa7feccf08a21a9\",
+            \"ebd46fde3c122047f883efca7d5557e18b0f99543a8e4e1f88e69771b53a2648\",
+            \"74e96f26cbc17cacee056abf4d822f76d8ad0829f6a230d8ddc239e4e1a1eef5\",
+            \"87d1c86bdf1c82e6d887da3b10b26d51d33693ede49f4d0391d74a2266eb1e94\",
+            \"aff1748ee300f71d07acd1a488a4af55ea6b5abcdd7e4b43dcd42536f3e3e7c9\",
+            \"1b7b48af435ad3a8ee722795bc2aba16a7e92fe3a882e47664d1beb644b88de7\"]";
 
-        let R_x = "d51e14e03d860718edccbbbca063c1e9b70379840cc40e59bd1bcdad095e460d";
+        let result = combine_signature(R_x, R_y, s_vec);
 
-        let R_y = "1a87eb5a02a91ba8ae27ed404bae489de2616dab6f65894294e42a1022b0fdfe"; 
-
-        let s_vec = "[
-            \"fe0bd6b5e65518fe6f05affe71c6c39bdffaa34be943e08b9172ccee8453e45f\", 
-            \"fc6ea88a46c187c002ec47e8abfb580557ade42a14684950acedbb4ab9bbb8af\",
-            \"ee144d6f11fd94b20f4bb51468eaf341b1072a481d5944a6a4e990076a1820dc\",
-            \"65fe6687f6eefc8579f4738bd7b608ac1fa7a7068cde028f54e77d8c67030e27\",
-            \"4e0e1b7531bd76c4ae9feb99bad1c3a2dab93cecb37bb970ba97a4bdcc75d161\",
-            \"52b16941e6e6478a8bda762400d0a5d382983282f94a8e1bc301edd62050798c\",
-            \"9f88a9a696e397172ab5faa20f869d37128854eb237d47d612b877441ac232ee\",
-            \"6e7a21bc5ea6064268ecf258cb1ecc500763d8a4f73004fc6c9c0c228e114ef\",
-            \"c4db7ae435602caeedc2e39b43cc53dc5ae2162fd5cf8d71ad30b6c46a9d1731\",
-            \"2a6491aac89f4e51cd423f475ae8ff62118cfbaf0d10b131572309f9e367874d\"]";
-
-        let result = combine_signature(R_x, R_y,  s_vec);
-
-        println!("Result: {}", result);
-
-        // assert_eq!(
-        //     result, "{\"r\":\"d51e14e03d860718edccbbbca063c1e9b70379840cc40e59bd1bcdad095e460d\",\"s\":\"c851f3232a9ea4dec34129d32e199d75dbacfbda00d512e9b3afc8d0e74e7ea\",\"recid\":0}"
-        // );
-    }
-
-    #[test]
-    fn simple_sign_test2() {
-    
-        let R_x = "d51e14e03d860718edccbbbca063c1e9b70379840cc40e59bd1bcdad095e460d";
-
-        let R_y = "1a87eb5a02a91ba8ae27ed404bae489de2616dab6f65894294e42a1022b0fdfe"; 
-
-        let s_vec = "[\"4e52aeaed3e2e07977e2d0271b0ba4d8ecaa92aad7574496c5c51aa99a1fd1a1\" ,\"4f300a5d03a85c88bc7d85d5b29b3cd608c1fa1146c41d170f65e750f9ea0264\",\"95b1b520b25addae748e4f1cbf2c79afcef578da3285c8de71df35ba77d9930d\",\"c323d0f7f0626e62175539607a4205695dad2ce9362398390808a64acfc92c1f\",\"49263cfa45c1a1fd9e57e0e9a5afa7435c588e37a9c811809aa7feccf08a21a9\",\"ebd46fde3c122047f883efca7d5557e18b0f99543a8e4e1f88e69771b53a2648\",\"74e96f26cbc17cacee056abf4d822f76d8ad0829f6a230d8ddc239e4e1a1eef5\",\"87d1c86bdf1c82e6d887da3b10b26d51d33693ede49f4d0391d74a2266eb1e94\",\"aff1748ee300f71d07acd1a488a4af55ea6b5abcdd7e4b43dcd42536f3e3e7c9\",\"1b7b48af435ad3a8ee722795bc2aba16a7e92fe3a882e47664d1beb644b88de7\"]";
-
-        let result = combine_signature(R_x, R_y,  s_vec);
-
+        // this assertation uses known results from node tests (not currently Rust Crypto libs)
         assert_eq!(
-            result, "{\"r\":\"63a62e7c00f34a9de2fb55c99e672bb347b23b75991f4217dfbe31a09b627b22\",\"s\":\"c851f3232a9ea4dec34129d32e199d75dbacfbda00d512e9b3afc8d0e74e7ea\",\"recid\":0}"
+            result, "{\"r\":\"63a62e7c00f34a9de2fb55c99e672bb347b23b75991f4217dfbe31a09b627b22\",\"s\":\"0c851f3232a9ea4dec34129d32e199d75dbacfbda00d512e9b3afc8d0e74e7ea\",\"recid\":1}"
         
         );
     }
 
-
     #[test]
-    // Very basic test here, TODO: suggest better testing
-    fn simple_sign_test_from_objects() {
-        let mut s_vec: Vec<FE> = Vec::new();
-        s_vec.push(h2s(
-            "4f300a5d03a85c88bc7d85d5b29b3cd608c1fa1146c41d170f65e750f9ea0264",
-        ));
-        s_vec.push(h2s(
-            "95b1b520b25addae748e4f1cbf2c79afcef578da3285c8de71df35ba77d9930d",
-        ));
-        s_vec.push(h2s(
-            "c323d0f7f0626e62175539607a4205695dad2ce9362398390808a64acfc92c1f",
-        ));
-        s_vec.push(h2s(
-            "49263cfa45c1a1fd9e57e0e9a5afa7435c588e37a9c811809aa7feccf08a21a9",
-        ));
-        s_vec.push(h2s(
-            "ebd46fde3c122047f883efca7d5557e18b0f99543a8e4e1f88e69771b53a2648",
-        ));
-        s_vec.push(h2s(
-            "74e96f26cbc17cacee056abf4d822f76d8ad0829f6a230d8ddc239e4e1a1eef5",
-        ));
-        s_vec.push(h2s(
-            "87d1c86bdf1c82e6d887da3b10b26d51d33693ede49f4d0391d74a2266eb1e94",
-        ));
-        s_vec.push(h2s(
-            "aff1748ee300f71d07acd1a488a4af55ea6b5abcdd7e4b43dcd42536f3e3e7c9",
-        ));
-        s_vec.push(h2s(
-            "1b7b48af435ad3a8ee722795bc2aba16a7e92fe3a882e47664d1beb644b88de7",
-        ));
+    #[doc = "Test using a threshold of 2 of 3 sig shares."]
+    fn simple_sign_test_2_of_3_with_pkp() {
+        // rX, rY & s_vec are the raw values coming from the nodes
+        let R_x = "f485c4485a59a2c6854b9cd9b04d071f65e8fd009885834a1368670d79ec96c7";
+        let R_y = "9e378f07d922a06a1c1ca1ef1e8458f27f5e9c004f78a51ccc86a46368259bb2";
+        let s_vec = "[
+            \"304b56d7e5fb1d8837f443089bf03fdae99501aa52c7e2973ac2687356ca176b\",
+            \"fa31c7ca31101d16da36f61c40f04451da412cb16852461db6d5b409c7eac1a8\"
+            ]";
 
-        let r: Secp256k1Scalar =
-            h2s("63a62e7c00f34a9de2fb55c99e672bb347b23b75991f4217dfbe31a09b627b22");
-        let s_i: Secp256k1Scalar =
-            h2s("4e52aeaed3e2e07977e2d0271b0ba4d8ecaa92aad7574496c5c51aa99a1fd1a1");
-        let m = BigUint::from_str("903539832027060245").unwrap();
+        let result = combine_signature(R_x, R_y, s_vec);
 
-        //  "3bfc168dfb3e09b2899c6829bae5c99025a5d4bab2cb5b2a2b7be176379ad3a2d",
-
-        let yx = BigUint::from_str_radix(
-            "bfc168dfb3e09b2899c6829bae5c99025a5d4bab2cb5b2a2b7be176379ad3a2d",
-            16,
-        )
-        .unwrap();
-        let yy = BigUint::from_str_radix(
-            "18e7e02fbac1a28c0057ebb707ccb00b729cd37c0aadd42c883a6ba26581e221",
-            16,
-        )
-        .unwrap();
-
-        let y: Secp256k1Point = Secp256k1Point::from_coor(&yx, &yy);
-
-        // let ysr = y.bytes_compressed_to_big_int().to_str_radix(16);
-        // let ysr_x = y.x_coor().unwrap().to_bigint().unwrap().to_str_radix(16);
-        // let ysr_y = y.y_coor().unwrap().to_bigint().unwrap().to_str_radix(16);
-
-        let rx = BigUint::from_str_radix(
-            "63a62e7c00f34a9de2fb55c99e672bb347b23b75991f4217dfbe31a09b627b22",
-            16,
-        )
-        .unwrap();
-        let ry = BigUint::from_str_radix(
-            "816b4d34f48365ae5df7e965d9c0292531893aa40493bc5c327e6ee39512ef31",
-            16,
-        )
-        .unwrap();
-
-        let R: Secp256k1Point = Secp256k1Point::from_coor(&rx, &ry);
-
-        // let Rsr = R.bytes_compressed_to_big_int().to_str_radix(16);
-        // let Rsr_x = R.x_coor().unwrap().to_bigint().unwrap().to_str_radix(16);
-        // let Rsr_y = R.y_coor().unwrap().to_bigint().unwrap().to_str_radix(16);
-
-        // let msr = m.to_string();
-
-        let ls = LocalSignature { r, R, s_i, m, y };
-
-        let ls_l = serde_json::to_string(&ls).unwrap();
-        let ls_v = serde_json::to_string(&s_vec).unwrap();
-
-        let result = output_signature(&ls, &s_vec).unwrap();
-        let r = result.r.to_big_int().to_str_radix(16);
-        let s = result.s.to_big_int().to_str_radix(16);
-
+        // this assertation uses known results from node tests (not currently Rust Crypto libs)
         assert_eq!(
-            r,
-            "63a62e7c00f34a9de2fb55c99e672bb347b23b75991f4217dfbe31a09b627b22"
+            result, "{\"r\":\"f485c4485a59a2c6854b9cd9b04d071f65e8fd009885834a1368670d79ec96c7\",\"s\":\"2a7d1ea2170b3a9f122b3924dce0842e092751750bd1887931c5bdf04e7e97d2\",\"recid\":0}"
         );
+    }
+    #[test]
+    #[doc = "Test using a threshold of 2 of 3 sig shares, and comparing results to Rust Crypto's verification system."]
+
+    fn simple_sign_test_2_of_3_with_pkp_extended() {
+        // msg & pubkey will be used for an ECDSA verify from Rust Crypto crate
+        let msg = "Lit Protocol Rocks!";
+        let hex_pubkey = "045f6043924d928c544b0f4ace27913e9f9823fe6319c109b36acace12f5e338c3a0081aa220e23337aac219bbe84f278e428ee882e6661842f31e24ea46a34c02";
+
+        // rX, rY & s_vec are the raw values coming from the nodes
+        let R_x = "37bf1e617d138d25c482959ef754103c3127190a6a1013ec178d261967e6dec8";
+        let R_y = "a9d2c1eb4f6e5e15c315c4b724bf215ccbb0c619a163d4d4f0960e891fecc816";
+        let s_vec = "[
+            \"c6e6a8ef8e8df094767be4e8ad37403e9def8d0ee90eb01bcccc7c664192710d\",
+            \"e354a624e0bc3c3ea5d0958984576b667262fb4d80e7e4eb9d78508772572efd\"
+            ]";
+
+        let result = combine_signature(R_x, R_y, s_vec);
+
+        // this assertation uses known results from node tests (not currently Rust Crypto libs)
         assert_eq!(
-            s,
-            "c851f3232a9ea4dec34129d32e199d75dbacfbda00d512e9b3afc8d0e74e7ea"
+            result, "{\"r\":\"37bf1e617d138d25c482959ef754103c3127190a6a1013ec178d261967e6dec8\",\"s\":\"55c4b0eb90b5d32ce3b3858dce715458650b3170f49aab70155ff02bec82e278\",\"recid\":1}"
+        );
+
+        let sig: SignatureRecidHex =
+            serde_json::from_str(&result).expect("Error decoding r,s,recId to signature");
+        // this assertation uses the Rust Crypto verification
+        assert_eq!(
+            verify_signature(msg, &sig.r, &sig.s, &hex_pubkey).unwrap(),
+            true
         );
     }
 
-    pub fn h2s(hex: &str) -> Secp256k1Scalar {
-        ECScalar::from(&BigUint::from_str_radix(hex, 16).unwrap())
+    fn verify_signature(msg: &str, hex_r: &str, hex_s: &str, hex_pubkey: &str) -> Result<bool, ()> {
+        let r = hex_to_scalar(hex_r).unwrap();
+        let s = hex_to_scalar(hex_s).unwrap();
+
+        let msg = msg.as_ref();
+
+        let sig = Signature::from_scalars(r, s).unwrap();
+
+        let verifying_key = hex_to_verifying_key(hex_pubkey).unwrap();
+
+        // works if message is properly hashed - in this case sha2{256}
+        let result = verifying_key.verify(msg, &sig);
+
+        if result.is_err() {
+            println!(
+                "{:?} \n {:?} \n {:?}",
+                sig,
+                verifying_key,
+                &result.unwrap_err()
+            );
+            return Ok(false);
+        }
+
+        Ok(true)
     }
 }
+
+// // This is a representation of the GG20 version of recombination.
+
+// fn output_signature(ls: &LocalSignature, s_vec: &Vec<FE>) -> Result<SignatureRecid, Error> {
+//     let mut s = s_vec.iter().fold(ls.s_i.clone(), |acc, x| acc + x);
+
+//     let s_bn = s.to_big_int();
+
+//     let r: FE = ECScalar::from(&ls.R.x_coor().unwrap().mod_floor(&FE::q())); // q is the group order for the Secp256k1 curve.
+
+//     let ry: BigInt = ls.R.y_coor().unwrap().mod_floor(&FE::q());
+
+//     /*
+//      Calculate recovery id - it is not possible to compute the public key out of the signature
+//      itself. Recovery id is used to enable extracting the public key uniquely.
+//      1. id = R.y & 1
+//      2. if (s > curve.q / 2) id = id ^ 1
+//     */
+//     let is_ry_odd = ry.test_bit(0);
+//     let mut recid = if is_ry_odd { 1 } else { 0 };
+//     let s_tag_bn = FE::q() - &s_bn;
+//     if s_bn > s_tag_bn {
+//         s = ECScalar::from(&s_tag_bn);
+//         recid ^= 1;
+//     }
+
+//     let sig = SignatureRecid { r, s, recid };
+
+//     let ver = verify(&sig, &ls.y, &ls.m).is_ok();
+//     match ver {
+//         true => Ok(sig),
+//         false => Err(Error::InvalidSig),
+//     }
+// }
+
+// // verify's the signature - this function brings a lot of additional library overhead into scope
+// // and with the inclusion of web3/ethers in the JS side of the SDK, we aren't providing the users with any
+// // additional information.
+
+// fn verify(sig: &SignatureRecid, y: &GE, message: &BigInt) -> Result<(), Error> {
+//     let b = sig.s.invert();
+//     let a: FE = ECScalar::from(message);
+//     let u1 = a * &b;
+//     let u2 = sig.r.clone() * &b;
+
+//     let g: GE = ECPoint::generator();
+//     let gu1 = &g * &u1;
+//     let yu2 = y * &u2;
+//     // can be faster using shamir trick
+//     if sig.r.clone() == ECScalar::from(&(gu1 + yu2).x_coor().unwrap().mod_floor(&FE::q())) {
+//         Ok(())
+//     } else {
+//         Err(Error::InvalidSig)
+//     }
+// }
