@@ -1,6 +1,6 @@
 use super::cs_curve::combine_signature_shares;
 use crate::models::{SignatureRecidHex, SignedData};
-use elliptic_curve::group::GroupEncoding;
+use elliptic_curve::{group::GroupEncoding, bigint::Encoding};
 use p256::{AffinePoint, NistP256, Scalar};
 
 #[derive(Clone, PartialEq, Debug)]
@@ -58,7 +58,17 @@ pub fn do_combine_signature(
 
     let r = sig.big_r;
     let s = sig.s;
-    let recid = 1; // FIX_ME ... this is a hack to make the tests pass
+
+  // calc the recovery id
+    use elliptic_curve::point::AffineCoordinates;
+    use elliptic_curve::Curve;
+    let mut recid  =  if presignature_big_r.y_is_odd().into() { 1 } else { 0 };    
+    let s_bi = num_bigint::BigUint::from_bytes_be( &s.to_bytes());
+    let order = num_bigint::BigUint::from_bytes_be( &NistP256::ORDER.to_be_bytes());
+
+    if s_bi > order - &s_bi {
+        recid ^= 1;
+    }
 
     SignatureRecid { r, s, recid }
 }
