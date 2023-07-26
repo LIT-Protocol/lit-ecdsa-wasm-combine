@@ -36,6 +36,7 @@ pub fn combine_signature(shares: Vec<String>) -> String {
     serde_json::to_string(&sig_hex).unwrap()
 
 }
+
 #[doc = "Entry point for recombining signatures."]
 fn combine_signature_internal(shares: Vec<String>) -> Result<SignatureRecid, CombinationError> {
     let mut signed_data: Vec<SignedDatak256> = Vec::new();
@@ -49,7 +50,7 @@ fn combine_signature_internal(shares: Vec<String>) -> Result<SignatureRecid, Com
 
     let public_key = signed_data[0].public_key;
     let msg_hash = signed_data[0].data_signed;
-    let presignature_big_r = signed_data[0].local_x;
+    let presignature_big_r = signed_data[0].big_r;
 
     let shares = signed_data
         .iter()
