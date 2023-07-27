@@ -31,8 +31,7 @@ pub struct SignedDatak256 {
     pub data_signed: k256::Scalar,
     pub signature_share: k256::Scalar,
     pub share_index: u32,
-    pub local_x: k256::AffinePoint,
-    pub local_y: k256::AffinePoint,
+    pub big_r: k256::AffinePoint,
     pub public_key: k256::AffinePoint,
     pub sig_name: String,
 }
