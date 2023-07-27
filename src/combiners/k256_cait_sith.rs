@@ -43,7 +43,7 @@ fn combine_signature_internal(shares: Vec<String>) -> Result<SignatureRecid, Com
     for share in shares {
         let data = serde_json::from_str(&share);
         if data.is_err() {
-            return Err(  CombinationError::DeserializeError);
+            return Err(CombinationError::DeserializeError);
         }
         signed_data.push(data.unwrap());
     }
