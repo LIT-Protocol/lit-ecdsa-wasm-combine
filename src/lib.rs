@@ -48,7 +48,7 @@ pub fn combine_signature(in_shares: Array, key_type: u8) -> String {
 
 #[wasm_bindgen]
 #[doc = "Entry point for compute hd derived public keys"]
-pub fn compute_public_key(id: String, public_keys: Array) -> String {
+pub fn compute_public_key(id: String, public_keys: Array, key_type: u8) -> String {
     panic::set_hook(Box::new(console_error_panic_hook::hook));
     /*
         compressed -> 33
@@ -74,9 +74,11 @@ pub fn compute_public_key(id: String, public_keys: Array) -> String {
     }
 
     let id = id.as_bytes();
-
-    let deriver = combiners::hd_ecdsa::HdKeyDeriver::<Secp256k1>::new(id, combiners::hd_ecdsa::CXT);
-
+    let deriver = match key_type {
+        3 => combiners::hd_ecdsa::HdKeyDeriver::<Secp256k1>::new(id, combiners::hd_ecdsa::CXT),
+        _ => panic!("Invalid key type")
+    };
+    
     if deriver.is_err() {
         panic!("Could not derive publick key {}", deriver.err().unwrap())
     }

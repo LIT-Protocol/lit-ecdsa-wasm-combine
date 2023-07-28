@@ -1,12 +1,12 @@
 use error::Error;
 use web_sys::console;
 
-use std::fmt::{self, Debug, Display, Formatter, LowerHex, UpperHex};
+use std::fmt::Debug;
 
 use k256::elliptic_curve::group::cofactor::CofactorGroup;
 use k256::elliptic_curve::hash2curve::{ExpandMsgXmd, FromOkm};
 use k256::elliptic_curve::{
-    group::Curve, hash2curve::GroupDigest, CurveArithmetic, Field, Group, PrimeField,
+    hash2curve::GroupDigest, CurveArithmetic, Field, Group,
     ScalarPrimitive,
 };
 
