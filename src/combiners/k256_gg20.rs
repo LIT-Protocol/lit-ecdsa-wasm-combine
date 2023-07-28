@@ -3,7 +3,6 @@ use elliptic_curve::scalar::ScalarPrimitive;
 use k256::ecdsa::VerifyingKey;
 use num_bigint::BigUint as BigInt;
 use num_traits::Num;
-use rand::AsByteSliceMut;
 use std::ops::BitAnd;
 use std::ops::Shl;
 
@@ -79,7 +78,7 @@ pub fn hex_to_scalar(hex_val: &str) -> Result<FE, ()> {
     }
 
     let mut slice = hex::decode(hex_val).unwrap();
-    let slice = slice.as_byte_slice_mut();
+    let slice = slice.as_slice();
 
     let sp = ScalarPrimitive::from_slice(slice).expect("Error decoding scalar from bytes");
     Ok(FE::from(sp))
@@ -107,7 +106,7 @@ pub fn hex_to_verifying_key(hex_val: &str) -> Result<VerifyingKey, ()> {
         hex_val.insert(0, '0');
     }
     let mut slice = hex::decode(hex_val).unwrap();
-    let bytes = slice.as_byte_slice_mut();
+    let bytes = slice.as_slice();
     let pubkey =
         VerifyingKey::from_sec1_bytes(bytes).expect("Error decoding verifying key from bytes");
     Ok(pubkey)
@@ -128,7 +127,7 @@ pub fn combine_signature_internal(
     let mut s = s_vec.iter().skip(1).fold(init, |acc, x| acc + x);
 
     let mut g_a = s.to_bytes();
-    let g_a = g_a.as_byte_slice_mut();
+    let g_a = g_a.as_slice();
     let s_bn = BigInt::from_bytes_be(&g_a);
 
     let mut x_mode_floor_vec = local_x.mod_floor(&q).to_bytes_be();

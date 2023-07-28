@@ -1,5 +1,9 @@
+use elliptic_curve::sec1::ToEncodedPoint;
+use k256::Secp256k1;
+
 #[cfg(test)]
 use crate::combiners;
+use crate::convert_to_point;
 
 #[test]
 pub fn cait_sith_test_k256() {
@@ -13,4 +17,24 @@ pub fn cait_sith_test_k256() {
     shares.push(share3.to_string());
 
     combiners::k256_cait_sith::combine_signature(shares);
+}
+
+#[test]
+pub fn hd_key_compute_pub_key() {
+    const id: &str = "hello-world";
+    const public_keys: [&str; 2] = ["049552b1bec13fb7903b052d5ea7cbe0227f3b2d01e131aa04caaab61cddc9e53840e4959ec2388e6f332e089399ccbe515464034ed999ada56a6a449822ce8285", "046b47116d2edea42e526274a468fc80f94f509ab9797763bd80d879a048ab4cb4348cca96489ddabdb978ddb06487897d9f983d047e23788153f7a535d8d7d7ff"];
+
+    let mut hd_pub_keys = Vec::with_capacity(public_keys.len() as usize);
+    for pubkey in public_keys.iter() {
+        let hex_pub_key = hex::decode(pubkey).unwrap();
+        let a_p = convert_to_point(hex_pub_key.as_slice());
+        hd_pub_keys.push(a_p);
+    }
+    let deriver =
+        combiners::hd_ecdsa::HdKeyDeriver::<Secp256k1>::new(id.as_bytes(), combiners::hd_ecdsa::CXT).unwrap();
+
+    let pubkey = deriver.compute_public_key(&hd_pub_keys.as_slice());
+    let pubkey = hex::encode(pubkey.to_encoded_point(true).as_bytes());
+    
+    println!("pubkey {}", pubkey);
 }
