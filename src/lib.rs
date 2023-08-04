@@ -38,8 +38,8 @@ pub fn combine_signature(in_shares: Array, key_type: u8) -> String {
 
     let sig_hex = match key_type {
         // 2 => combiners::k256_zg::combine_signature(R_x, R_y, shares),
-        3 => combiners::k256_cait_sith::combine_signature(shares),
-        4 => combiners::p256_cait_sith::combine_signature(shares),
+        2 => combiners::k256_cait_sith::combine_signature(shares),
+        3 => combiners::p256_cait_sith::combine_signature(shares),
         _ => panic!("Invalid key type"),
     };
 
@@ -69,13 +69,13 @@ pub fn compute_public_key(id: String, public_keys: Array, key_type: u8) -> Strin
             );
         }
         let hex_pub_key = hex_pub_key.unwrap();
-        let a_p = convert_to_point(hex_pub_key.as_slice());
-        hd_pub_keys.push(a_p);
+        let point = convert_to_point(hex_pub_key.as_slice());
+        hd_pub_keys.push(point);
     }
 
     let id = id.as_bytes();
     let deriver = match key_type {
-        3 => combiners::hd_ecdsa::HdKeyDeriver::<Secp256k1>::new(id, combiners::hd_ecdsa::CXT),
+        2 => combiners::hd_ecdsa::HdKeyDeriver::<Secp256k1>::new(id, combiners::hd_ecdsa::CXT),
         _ => panic!("Invalid key type")
     };
     
