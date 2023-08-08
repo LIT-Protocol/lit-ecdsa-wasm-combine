@@ -96,3 +96,58 @@ fn convert_to_point(input: &[u8]) -> k256::ProjectivePoint {
     k256::ProjectivePoint::from_encoded_point(&k256::EncodedPoint::from_bytes(input).unwrap())
         .unwrap()
 }
+
+// // This is a representation of the GG20 version of recombination.
+
+// fn output_signature(ls: &LocalSignature, s_vec: &Vec<FE>) -> Result<SignatureRecid, Error> {
+//     let mut s = s_vec.iter().fold(ls.s_i.clone(), |acc, x| acc + x);
+
+//     let s_bn = s.to_big_int();
+
+//     let r: FE = ECScalar::from(&ls.R.x_coor().unwrap().mod_floor(&FE::q())); // q is the group order for the Secp256k1 curve.
+
+//     let ry: BigInt = ls.R.y_coor().unwrap().mod_floor(&FE::q());
+
+//     /*
+//      Calculate recovery id - it is not possible to compute the public key out of the signature
+//      itself. Recovery id is used to enable extracting the public key uniquely.
+//      1. id = R.y & 1
+//      2. if (s > curve.q / 2) id = id ^ 1
+//     */
+//     let is_ry_odd = ry.test_bit(0);
+//     let mut recid = if is_ry_odd { 1 } else { 0 };
+//     let s_tag_bn = FE::q() - &s_bn;
+//     if s_bn > s_tag_bn {
+//         s = ECScalar::from(&s_tag_bn);
+//         recid ^= 1;
+//     }
+
+//     let sig = SignatureRecid { r, s, recid };
+
+//     let ver = verify(&sig, &ls.y, &ls.m).is_ok();
+//     match ver {
+//         true => Ok(sig),
+//         false => Err(Error::InvalidSig),
+//     }
+// }
+
+// // verify's the signature - this function brings a lot of additional library overhead into scope
+// // and with the inclusion of web3/ethers in the JS side of the SDK, we aren't providing the users with any
+// // additional information.
+
+// fn verify(sig: &SignatureRecid, y: &GE, message: &BigInt) -> Result<(), Error> {
+//     let b = sig.s.invert();
+//     let a: FE = ECScalar::from(message);
+//     let u1 = a * &b;
+//     let u2 = sig.r.clone() * &b;
+
+//     let g: GE = ECPoint::generator();
+//     let gu1 = &g * &u1;
+//     let yu2 = y * &u2;
+//     // can be faster using shamir trick
+//     if sig.r.clone() == ECScalar::from(&(gu1 + yu2).x_coor().unwrap().mod_floor(&FE::q())) {
+//         Ok(())
+//     } else {
+//         Err(Error::InvalidSig)
+//     }
+// }

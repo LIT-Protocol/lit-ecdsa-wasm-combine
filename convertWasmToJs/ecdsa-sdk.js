@@ -1,13 +1,13 @@
-import pako from 'pako'
+import pako from 'pako';
 
 // Contants
 
-const skLen = 32 // bytes
-const pkLen = 48 // bytes
-const sigLen = 96 // bytes
-const maxMsgLen = 1049600 // bytes
-const maxCtLen = 1049600 // bytes
-const decryptionShareLen = 48 // bytes
+const skLen = 32; // bytes
+const pkLen = 48; // bytes
+const sigLen = 96; // bytes
+const maxMsgLen = 1049600; // bytes
+const maxCtLen = 1049600; // bytes
+const decryptionShareLen = 48; // bytes
 
 // the number of bytes in a row derived from a BivarPoly
 // which varies depending on the threshold.
@@ -22,8 +22,8 @@ const row_sizes_by_threshold = [
   264, // threshold 7
   296, // threshold 8
   328, // threshold 9
-  360 // threshold 10
-]
+  360, // threshold 10
+];
 
 // the number of bytes in a commitment derived from a BivarPoly
 // which varies depending on the threshold.
@@ -38,8 +38,8 @@ const commitment_sizes_by_threshold = [
   392, // threshold 7
   440, // threshold 8
   488, // threshold 9
-  536 // threshold 10
-]
+  536, // threshold 10
+];
 
 // the number of bytes in the master secret key (Poly)
 // which varies depending on the threshold.
@@ -54,35 +54,35 @@ const poly_sizes_by_threshold = [
   264, // threshold 7
   296, // threshold 8
   328, // threshold 9
-  360 // threshold 10
-]
+  360, // threshold 10
+];
 // Encoding conversions
 
 // modified from https://stackoverflow.com/a/11058858
 function asciiToUint8Array(a) {
-    let b = new Uint8Array(a.length);
-    for (let i = 0; i < a.length; i++) {
-        b[i] = a.charCodeAt(i);
-    }
-    return b;
+  let b = new Uint8Array(a.length);
+  for (let i = 0; i < a.length; i++) {
+    b[i] = a.charCodeAt(i);
+  }
+  return b;
 }
 // https://stackoverflow.com/a/19102224
 // TODO resolve RangeError possibility here, see SO comments
 function uint8ArrayToAscii(a) {
-    return String.fromCharCode.apply(null, a);
+  return String.fromCharCode.apply(null, a);
 }
 // https://stackoverflow.com/a/50868276
 function hexToUint8Array(h) {
-    if (h.length == 0) {
-        return new Uint8Array();
-    }
-    return new Uint8Array(h.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+  if (h.length == 0) {
+    return new Uint8Array();
+  }
+  return new Uint8Array(h.match(/.{1,2}/g).map((byte) => parseInt(byte, 16)));
 }
 function uint8ArrayToHex(a) {
-    return a.reduce((str, byte) => str + byte.toString(16).padStart(2, '0'), '');
+  return a.reduce((str, byte) => str + byte.toString(16).padStart(2, '0'), '');
 }
 function uint8ArrayToByteStr(a) {
-    return "[" + a.join(", ") + "]";
+  return '[' + a.join(', ') + ']';
 }
 
 //https://gist.github.com/enepomnyaschih/72c423f727d395eeaa09697058238727
@@ -125,11 +125,70 @@ base64abc.push("+");
 base64abc.push("/");
 */
 const base64abc = [
-    "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
-    "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
-    "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
-    "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z",
-    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "+", "/"
+  'A',
+  'B',
+  'C',
+  'D',
+  'E',
+  'F',
+  'G',
+  'H',
+  'I',
+  'J',
+  'K',
+  'L',
+  'M',
+  'N',
+  'O',
+  'P',
+  'Q',
+  'R',
+  'S',
+  'T',
+  'U',
+  'V',
+  'W',
+  'X',
+  'Y',
+  'Z',
+  'a',
+  'b',
+  'c',
+  'd',
+  'e',
+  'f',
+  'g',
+  'h',
+  'i',
+  'j',
+  'k',
+  'l',
+  'm',
+  'n',
+  'o',
+  'p',
+  'q',
+  'r',
+  's',
+  't',
+  'u',
+  'v',
+  'w',
+  'x',
+  'y',
+  'z',
+  '0',
+  '1',
+  '2',
+  '3',
+  '4',
+  '5',
+  '6',
+  '7',
+  '8',
+  '9',
+  '+',
+  '/',
 ];
 
 /*
@@ -144,72 +203,75 @@ base64abc.forEach((char, index) => {
 base64codes["=".charCodeAt(0)] = 0; // ignored anyway, so we just need to prevent an error
 */
 const base64codes = [
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 62, 255, 255, 255, 63,
-    52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 255, 255, 255, 0, 255, 255,
-    255, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
-    15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 255, 255, 255, 255, 255,
-    255, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
-    41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51
+  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 62, 255, 255,
+  255, 63, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 255, 255, 255, 0, 255, 255,
+  255, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+  21, 22, 23, 24, 25, 255, 255, 255, 255, 255, 255, 26, 27, 28, 29, 30, 31, 32,
+  33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
 ];
 
 function getBase64Code(charCode) {
-    if (charCode >= base64codes.length) {
-        throw new Error("Unable to parse base64 string.");
-    }
-    const code = base64codes[charCode];
-    if (code === 255) {
-        throw new Error("Unable to parse base64 string.");
-    }
-    return code;
+  if (charCode >= base64codes.length) {
+    throw new Error('Unable to parse base64 string.');
+  }
+  const code = base64codes[charCode];
+  if (code === 255) {
+    throw new Error('Unable to parse base64 string.');
+  }
+  return code;
 }
 
 export function uint8ArrayToBase64(bytes) {
-    let result = '', i, l = bytes.length;
-    for (i = 2; i < l; i += 3) {
-        result += base64abc[bytes[i - 2] >> 2];
-        result += base64abc[((bytes[i - 2] & 0x03) << 4) | (bytes[i - 1] >> 4)];
-        result += base64abc[((bytes[i - 1] & 0x0F) << 2) | (bytes[i] >> 6)];
-        result += base64abc[bytes[i] & 0x3F];
-    }
-    if (i === l + 1) { // 1 octet yet to write
-        result += base64abc[bytes[i - 2] >> 2];
-        result += base64abc[(bytes[i - 2] & 0x03) << 4];
-        result += "==";
-    }
-    if (i === l) { // 2 octets yet to write
-        result += base64abc[bytes[i - 2] >> 2];
-        result += base64abc[((bytes[i - 2] & 0x03) << 4) | (bytes[i - 1] >> 4)];
-        result += base64abc[(bytes[i - 1] & 0x0F) << 2];
-        result += "=";
-    }
-    return result;
+  let result = '',
+    i,
+    l = bytes.length;
+  for (i = 2; i < l; i += 3) {
+    result += base64abc[bytes[i - 2] >> 2];
+    result += base64abc[((bytes[i - 2] & 0x03) << 4) | (bytes[i - 1] >> 4)];
+    result += base64abc[((bytes[i - 1] & 0x0f) << 2) | (bytes[i] >> 6)];
+    result += base64abc[bytes[i] & 0x3f];
+  }
+  if (i === l + 1) {
+    // 1 octet yet to write
+    result += base64abc[bytes[i - 2] >> 2];
+    result += base64abc[(bytes[i - 2] & 0x03) << 4];
+    result += '==';
+  }
+  if (i === l) {
+    // 2 octets yet to write
+    result += base64abc[bytes[i - 2] >> 2];
+    result += base64abc[((bytes[i - 2] & 0x03) << 4) | (bytes[i - 1] >> 4)];
+    result += base64abc[(bytes[i - 1] & 0x0f) << 2];
+    result += '=';
+  }
+  return result;
 }
 
 export function base64ToUint8Array(str) {
-    if (str.length % 4 !== 0) {
-        throw new Error("Unable to parse base64 string.");
-    }
-    const index = str.indexOf("=");
-    if (index !== -1 && index < str.length - 2) {
-        throw new Error("Unable to parse base64 string.");
-    }
-    let missingOctets = str.endsWith("==") ? 2 : str.endsWith("=") ? 1 : 0,
-        n = str.length,
-        result = new Uint8Array(3 * (n / 4)),
-        buffer;
-    for (let i = 0, j = 0; i < n; i += 4, j += 3) {
-        buffer =
-            getBase64Code(str.charCodeAt(i)) << 18 |
-            getBase64Code(str.charCodeAt(i + 1)) << 12 |
-            getBase64Code(str.charCodeAt(i + 2)) << 6 |
-            getBase64Code(str.charCodeAt(i + 3));
-        result[j] = buffer >> 16;
-        result[j + 1] = (buffer >> 8) & 0xFF;
-        result[j + 2] = buffer & 0xFF;
-    }
-    return result.subarray(0, result.length - missingOctets);
+  if (str.length % 4 !== 0) {
+    throw new Error('Unable to parse base64 string.');
+  }
+  const index = str.indexOf('=');
+  if (index !== -1 && index < str.length - 2) {
+    throw new Error('Unable to parse base64 string.');
+  }
+  let missingOctets = str.endsWith('==') ? 2 : str.endsWith('=') ? 1 : 0,
+    n = str.length,
+    result = new Uint8Array(3 * (n / 4)),
+    buffer;
+  for (let i = 0, j = 0; i < n; i += 4, j += 3) {
+    buffer =
+      (getBase64Code(str.charCodeAt(i)) << 18) |
+      (getBase64Code(str.charCodeAt(i + 1)) << 12) |
+      (getBase64Code(str.charCodeAt(i + 2)) << 6) |
+      getBase64Code(str.charCodeAt(i + 3));
+    result[j] = buffer >> 16;
+    result[j + 1] = (buffer >> 8) & 0xff;
+    result[j + 2] = buffer & 0xff;
+  }
+  return result.subarray(0, result.length - missingOctets);
 }
 
 // export function base64encode(str, encoder = new TextEncoder()) {
@@ -235,7 +297,9 @@ const heap = new Array(128).fill(undefined);
 
 heap.push(undefined, null, true, false);
 
-function getObject(idx) { return heap[idx]; }
+function getObject(idx) {
+  return heap[idx];
+}
 
 let WASM_VECTOR_LEN = 0;
 
@@ -250,55 +314,57 @@ function getUint8Memory0() {
 
 const cachedTextEncoder = new TextEncoder('utf-8');
 
-const encodeString = (typeof cachedTextEncoder.encodeInto === 'function'
+const encodeString =
+  typeof cachedTextEncoder.encodeInto === 'function'
     ? function (arg, view) {
-    return cachedTextEncoder.encodeInto(arg, view);
-}
+        return cachedTextEncoder.encodeInto(arg, view);
+      }
     : function (arg, view) {
-    const buf = cachedTextEncoder.encode(arg);
-    view.set(buf);
-    return {
-        read: arg.length,
-        written: buf.length
-    };
-});
+        const buf = cachedTextEncoder.encode(arg);
+        view.set(buf);
+        return {
+          read: arg.length,
+          written: buf.length,
+        };
+      };
 
 function passStringToWasm0(arg, malloc, realloc) {
-
-    if (realloc === undefined) {
-        const buf = cachedTextEncoder.encode(arg);
-        const ptr = malloc(buf.length);
-        getUint8Memory0().subarray(ptr, ptr + buf.length).set(buf);
-        WASM_VECTOR_LEN = buf.length;
-        return ptr;
-    }
-
-    let len = arg.length;
-    let ptr = malloc(len);
-
-    const mem = getUint8Memory0();
-
-    let offset = 0;
-
-    for (; offset < len; offset++) {
-        const code = arg.charCodeAt(offset);
-        if (code > 0x7F) break;
-        mem[ptr + offset] = code;
-    }
-
-    if (offset !== len) {
-        if (offset !== 0) {
-            arg = arg.slice(offset);
-        }
-        ptr = realloc(ptr, len, len = offset + arg.length * 3);
-        const view = getUint8Memory0().subarray(ptr + offset, ptr + len);
-        const ret = encodeString(arg, view);
-
-        offset += ret.written;
-    }
-
-    WASM_VECTOR_LEN = offset;
+  if (realloc === undefined) {
+    const buf = cachedTextEncoder.encode(arg);
+    const ptr = malloc(buf.length);
+    getUint8Memory0()
+      .subarray(ptr, ptr + buf.length)
+      .set(buf);
+    WASM_VECTOR_LEN = buf.length;
     return ptr;
+  }
+
+  let len = arg.length;
+  let ptr = malloc(len);
+
+  const mem = getUint8Memory0();
+
+  let offset = 0;
+
+  for (; offset < len; offset++) {
+    const code = arg.charCodeAt(offset);
+    if (code > 0x7f) break;
+    mem[ptr + offset] = code;
+  }
+
+  if (offset !== len) {
+    if (offset !== 0) {
+      arg = arg.slice(offset);
+    }
+    ptr = realloc(ptr, len, (len = offset + arg.length * 3));
+    const view = getUint8Memory0().subarray(ptr + offset, ptr + len);
+    const ret = encodeString(arg, view);
+
+    offset += ret.written;
+  }
+
+  WASM_VECTOR_LEN = offset;
+  return ptr;
 }
 
 function isLikeNone(x) {
@@ -388,34 +454,33 @@ export function compute_public_key(id, public_keys, key_type) {
 }
 
 async function load(module, imports) {
-    if (typeof Response === 'function' && module instanceof Response) {
-        if (typeof WebAssembly.instantiateStreaming === 'function') {
-            try {
-                return await WebAssembly.instantiateStreaming(module, imports);
-
-            } catch (e) {
-                if (module.headers.get('Content-Type') != 'application/wasm') {
-                    console.warn("`WebAssembly.instantiateStreaming` failed because your server does not serve wasm with `application/wasm` MIME type. Falling back to `WebAssembly.instantiate` which is slower. Original error:\n", e);
-
-                } else {
-                    throw e;
-                }
-            }
-        }
-
-        const bytes = await module.arrayBuffer();
-        return await WebAssembly.instantiate(bytes, imports);
-
-    } else {
-        const instance = await WebAssembly.instantiate(module, imports);
-
-        if (instance instanceof WebAssembly.Instance) {
-            return { instance, module };
-
+  if (typeof Response === 'function' && module instanceof Response) {
+    if (typeof WebAssembly.instantiateStreaming === 'function') {
+      try {
+        return await WebAssembly.instantiateStreaming(module, imports);
+      } catch (e) {
+        if (module.headers.get('Content-Type') != 'application/wasm') {
+          console.warn(
+            '`WebAssembly.instantiateStreaming` failed because your server does not serve wasm with `application/wasm` MIME type. Falling back to `WebAssembly.instantiate` which is slower. Original error:\n',
+            e
+          );
         } else {
-            return instance;
+          throw e;
         }
+      }
     }
+
+    const bytes = await module.arrayBuffer();
+    return await WebAssembly.instantiate(bytes, imports);
+  } else {
+    const instance = await WebAssembly.instantiate(module, imports);
+
+    if (instance instanceof WebAssembly.Instance) {
+      return { instance, module };
+    } else {
+      return instance;
+    }
+  }
 }
 
 function getImports() {
@@ -518,7 +583,7 @@ export default init;
 
 
 export async function initWasmEcdsaSdk() {
-var b = "";
+  var b = '';
 
 b+="eNrsvXuYXcdVL7irau999nl17261pLa6LdXZkqWWJdktR684uY62LrLSdBTnzngyfHeYz3b8Sk6"
 b+="bxC0LJXc+ubsTCyPAJEowXAVMUMCJTSYCMZggwJe0wSSCa0BcnERDTFCCk4h7nVzdxAEFnGjWb6"
@@ -2059,9 +2124,6 @@ b+="Y1MQnkKpVysSZMoVRg3G2yGNKIMCUpEaVRqRAAeQUMPidgxNR9nke4N3Vyd3F2cXBxlUFqQnS+0"
 b+="a3F3EIJNdB9Hlz6Orv3t2bmibBCd7eLk2t/JRQANPRxTwSI+QyJrBw+P9nAT2qVJRB5paX3Eve3"
 b+="/D9U5IsA="
 
-
-    var input = pako.inflate(base64ToUint8Array(b));
-    return init(input);
+  var input = pako.inflate(base64ToUint8Array(b));
+  return init(input);
 }
-
-
