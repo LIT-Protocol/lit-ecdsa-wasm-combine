@@ -45,7 +45,7 @@ where
         powers[1] = self.0;
         for i in 2..powers.len() {
             powers[i] = powers[i - 1] * self.0;
-            console::log_1(&js_sys::JsString::from(format!("power at index: {} value: {:?}", i, powers[i])));
+            //console::log_1(&js_sys::JsString::from(format!("power at index: {} value: {:?}", i, powers[i])));
         }
         sum_of_products_pippenger::<C>(public_keys, &powers)
     }
