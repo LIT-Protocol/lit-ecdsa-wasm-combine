@@ -19,7 +19,7 @@ extern crate num_integer;
 extern crate num_traits;
 extern crate rand;
 
-mod combiners;
+pub mod combiners;
 mod errors;
 mod models;
 
