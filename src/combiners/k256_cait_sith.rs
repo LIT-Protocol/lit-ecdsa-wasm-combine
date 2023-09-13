@@ -5,8 +5,10 @@ use crate::{
 
 use super::cs_curve::combine_signature_shares;
 use elliptic_curve::{
-    group::GroupEncoding, ops::Reduce, point::AffineCoordinates, sec1::ToEncodedPoint, Curve,
-    CurveArithmetic,
+    group::GroupEncoding, 
+    // ops::Reduce, 
+    point::AffineCoordinates, sec1::ToEncodedPoint, 
+    // Curve,    CurveArithmetic,
 };
 use k256::{
     ecdsa::{RecoveryId, VerifyingKey},
@@ -85,10 +87,11 @@ pub fn do_combine_signature(
     let r = sig.big_r;
     let s = sig.s;
 
-    let signature = k256::ecdsa::Signature::from_scalars(
-        <<Secp256k1 as CurveArithmetic>::Scalar as Reduce<<Secp256k1 as Curve>::Uint>>::reduce_bytes(&r.x()),
-        s,
-    ).expect("Couldn't create signature");
+    let signature = k256::ecdsa::Signature::from_scalars(r.x(), s).expect("Couldn't create signature");
+    // let signature = k256::ecdsa::Signature::from_scalars(
+    //     <<Secp256k1 as CurveArithmetic>::Scalar as Reduce<<Secp256k1 as Curve>::Uint>>::reduce_bytes(&r.x()),
+    //     s,
+    // ).expect("Couldn't create signature");
     // Convert our signature into a recoverable one
     let pubkey_0 = VerifyingKey::recover_from_prehash(
         &msg_hash.to_bytes(),
@@ -96,6 +99,8 @@ pub fn do_combine_signature(
         RecoveryId::try_from(0).expect("Couldn't create recovery id"),
     )
     .expect("Couldn't recover pubkey for recovery id : 0");
+
+    
     let pubkey_1 = VerifyingKey::recover_from_prehash(
         &msg_hash.to_bytes(),
         &signature,
