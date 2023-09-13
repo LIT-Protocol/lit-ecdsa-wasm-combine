@@ -5,9 +5,6 @@ extern crate web_sys;
 use elliptic_curve::sec1::ToEncodedPoint;
 use js_sys::Array;
 use k256::Secp256k1;
-use elliptic_curve::sec1::ToEncodedPoint;
-use js_sys::Array;
-use k256::Secp256k1;
 use std::panic;
 use wasm_bindgen::prelude::*;
 
@@ -31,7 +28,6 @@ mod tests;
 
 #[wasm_bindgen]
 #[doc = "Entry point for recombining signatures."]
-pub fn combine_signature(in_shares: Array, key_type: u8) -> String {
 pub fn combine_signature(in_shares: Array, key_type: u8) -> String {
     panic::set_hook(Box::new(console_error_panic_hook::hook));
 

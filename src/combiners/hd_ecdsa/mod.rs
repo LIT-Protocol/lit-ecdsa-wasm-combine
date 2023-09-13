@@ -1,5 +1,5 @@
 use error::Error;
-use web_sys::console;
+// use web_sys::console;
 
 use std::fmt::Debug;
 

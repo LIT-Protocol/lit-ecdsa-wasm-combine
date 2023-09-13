@@ -2,7 +2,6 @@
 name = "lit-ecdsa-wasm-combine"
 version = "0.1.0"
 edition = "2021"
-edition = "2021"
 authors = ["brendon <brendon@litprotocol.com>"]
 description = "WASM friendly recombination code for threshold ECDSA."
 homepage = "https://github.com/lit-protocol/lit-ecdsa-wasm-combine"
@@ -16,20 +15,16 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 wasm-bindgen = { version = "0.2.82", features = ["serde-serialize"] }
-wasm-bindgen = { version = "0.2.82", features = ["serde-serialize"] }
 web-sys = { version = "0.3.5", features = ["console"] }
-js-sys = "0.3.59"
 js-sys = "0.3.59"
 
 #rand = { version = "0.6" }
 serde = { version = "1.0.126", features = ["derive"] }
 serde_derive = "1.0"
 serde_json = "1.0.64"
-serde_json = "1.0.64"
 
 num-bigint = { version = "0.2.2", features = [ "rand"] }
 num-integer = "0.1"
-num-traits = "0.2.15"
 num-traits = "0.2.15"
 
 
@@ -52,7 +47,6 @@ digest = "0.10"
 vsss-rs = { version = "3.2", features = ["std"] }
 
 [dependencies.rand]
-version = "0.8"
 version = "0.8"
 package = "rand"
 
