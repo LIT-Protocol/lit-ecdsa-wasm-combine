@@ -7,7 +7,7 @@ use super::cs_curve::combine_signature_shares;
 use elliptic_curve::{
     group::GroupEncoding, 
     // ops::Reduce, 
-    point::AffineCoordinates, sec1::ToEncodedPoint, 
+    point::AffineCoordinates, sec1::ToEncodedPoint, ops::Reduce, PrimeField, CurveArithmetic, Curve, 
     // Curve,    CurveArithmetic,
 };
 use k256::{
@@ -73,7 +73,7 @@ fn combine_signature_internal(shares: Vec<String>) -> Result<SignatureRecid, Com
 }
 
 #[doc = "Basic math required to agregate signature shares and generate the final sig."]
-pub fn do_combine_signature(
+pub fn do_combine_signature2(
     public_key: AffinePoint,
     presignature_big_r: AffinePoint,
     msg_hash: Scalar,
@@ -86,6 +86,8 @@ pub fn do_combine_signature(
 
     let r = sig.big_r;
     let s = sig.s;
+
+    
 
     let signature = k256::ecdsa::Signature::from_scalars(r.x(), s).expect("Couldn't create signature");
     // let signature = k256::ecdsa::Signature::from_scalars(
@@ -148,21 +150,25 @@ pub fn do_combine_signature(
 // }
 
 // SIMPLIFIED
-// #[doc = "Basic math required to agregate signature shares and generate the final sig."]
-// pub fn do_combine_signature(
-//     public_key: AffinePoint,
-//     presignature_big_r: AffinePoint,
-//     msg_hash: Scalar,
-//     shares: Vec<Scalar>,
-// ) -> SignatureRecid {
-//     let sig =
-//         combine_signature_shares::<Secp256k1>(shares, public_key, presignature_big_r, msg_hash);
+#[doc = "Basic math required to agregate signature shares and generate the final sig."]
+pub fn do_combine_signature(
+    public_key: AffinePoint,
+    presignature_big_r: AffinePoint,
+    msg_hash: Scalar,
+    shares: Vec<Scalar>,
+) -> SignatureRecid {
+    let sig =
+        combine_signature_shares::<Secp256k1>(shares, public_key, presignature_big_r, msg_hash);
 
-//     let sig = sig.unwrap();
-//     let r = sig.big_r;
-//     let s = sig.s;
-//     // s is always low, so we have a simplified rec id calc of 1 or 0.
-//     let recid  =  if presignature_big_r.y_is_odd().into() { 0 } else { 1 };
+    let sig = sig.unwrap();
+    let r = sig.big_r;
+    let s = sig.s;
+    // s is always low, so we have a simplified rec id calc of 1 or 0.
+    // let recid  =  if presignature_big_r.y_is_odd().into() { 0 } else { 1 };
+    // let rr = r.x()reduce_bytes(&sig.big_r.x());
+    let rr =  <<Secp256k1 as CurveArithmetic>::Scalar as Reduce<<Secp256k1 as Curve>::Uint>>::reduce_bytes(&r.x());
+    let x_is_reduced = rr.to_repr() != sig.big_r.x();
+    let recid = RecoveryId::new(sig.big_r.y_is_odd().into(), x_is_reduced).to_byte();
 
-//     SignatureRecid { r, s, recid }
-// }
+    SignatureRecid { r, s, recid }
+}
