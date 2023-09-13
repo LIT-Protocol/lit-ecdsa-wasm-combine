@@ -4,8 +4,14 @@ use crate::{
 };
 
 use super::cs_curve::combine_signature_shares;
-use elliptic_curve::{bigint::Encoding, group::GroupEncoding, ScalarPrimitive};
-use k256::{AffinePoint, Scalar, Secp256k1};
+use elliptic_curve::{
+    bigint::Encoding, group::GroupEncoding, ops::Reduce, point::AffineCoordinates,
+    sec1::ToEncodedPoint, Curve, CurveArithmetic, ScalarPrimitive,
+};
+use k256::{
+    ecdsa::{RecoveryId, VerifyingKey},
+    AffinePoint, Scalar, Secp256k1,
+};
 
 #[derive(Clone, PartialEq, Debug)]
 struct Signature {
@@ -77,26 +83,32 @@ pub fn do_combine_signature(
     let sig = sig.unwrap();
 
     let r = sig.big_r;
-    let mut s = sig.s;
+    let s = sig.s;
 
-    // ethereum uses the "low s" rule, so we need to normalize s
-    let s_bi = num_bigint::BigUint::from_bytes_be(&s.to_bytes());
-    let order = num_bigint::BigUint::from_bytes_be(&k256::Secp256k1::ORDER.to_be_bytes());
-    let half_order = order.clone() >> 1;
-    if s_bi > half_order {
-        s = Scalar::from(
-            ScalarPrimitive::from_slice(&(order - s_bi).to_bytes_be())
-                .expect("Couldn't create scalar from bytes"),
-        );
-    }
+    let signature = k256::ecdsa::Signature::from_scalars(
+        <<Secp256k1 as CurveArithmetic>::Scalar as Reduce<<Secp256k1 as Curve>::Uint>>::reduce_bytes(&r.x()),
+        s,
+    ).expect("Couldn't create signature");
+    // Convert our signature into a recoverable one
+    let pubkey_0 = VerifyingKey::recover_from_prehash(
+        &msg_hash.to_bytes(),
+        &signature,
+        RecoveryId::try_from(0).expect("Couldn't create recovery id"),
+    )
+    .expect("Couldn't recover for recovery id 0");
+    let pubkey_1 = VerifyingKey::recover_from_prehash(
+        &msg_hash.to_bytes(),
+        &signature,
+        RecoveryId::try_from(1).expect("Couldn't create recovery id"),
+    )
+    .expect("Couldn't recover for recovery id 1");
 
-    // calc the recovery id
-    use elliptic_curve::point::AffineCoordinates;
-    use elliptic_curve::Curve;
-    let recid = match presignature_big_r.y_is_odd().into() {
-        true => 1,
-        false => 0,
+    let recid = if pubkey_0.to_encoded_point(false) == public_key.to_encoded_point(false) {
+        0
+    } else if pubkey_1.to_encoded_point(false) == public_key.to_encoded_point(false) {
+        1
+    } else {
+        panic!("Neither recovery ID leads to the correct public key");
     };
-
     SignatureRecid { r, s, recid }
 }
