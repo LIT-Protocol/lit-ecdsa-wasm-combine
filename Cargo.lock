@@ -145,6 +145,7 @@ dependencies = [
  "serdect",
  "signature",
  "spki",
+<<<<<<< HEAD
 ]
 
 [[package]]
@@ -171,6 +172,8 @@ dependencies = [
  "wasm-bindgen",
  "web-sys",
  "wee_alloc",
+=======
+>>>>>>> main
 ]
 
 [[package]]
@@ -305,6 +308,35 @@ name = "libc"
 version = "0.2.141"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3304a64d199bb964be99741b7a14d26972741915b3649639149b2479bb46f4b5"
+<<<<<<< HEAD
+=======
+
+[[package]]
+name = "lit-ecdsa-wasm-combine"
+version = "0.1.0"
+dependencies = [
+ "console_error_panic_hook",
+ "digest",
+ "elliptic-curve",
+ "getrandom",
+ "hex",
+ "js-sys",
+ "k256",
+ "num-bigint",
+ "num-integer",
+ "num-traits",
+ "p256",
+ "rand 0.8.5",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "sha2",
+ "vsss-rs",
+ "wasm-bindgen",
+ "web-sys",
+ "wee_alloc",
+]
+>>>>>>> main
 
 [[package]]
 name = "log"
