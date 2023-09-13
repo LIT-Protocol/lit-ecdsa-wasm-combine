@@ -1,13 +1,12 @@
 use error::Error;
-use web_sys::console;
+// use web_sys::console;
 
 use std::fmt::Debug;
 
 use k256::elliptic_curve::group::cofactor::CofactorGroup;
 use k256::elliptic_curve::hash2curve::{ExpandMsgXmd, FromOkm};
 use k256::elliptic_curve::{
-    hash2curve::GroupDigest, CurveArithmetic, Field, Group,
-    ScalarPrimitive,
+    hash2curve::GroupDigest, CurveArithmetic, Field, Group, ScalarPrimitive,
 };
 
 mod error;
@@ -45,7 +44,7 @@ where
         powers[1] = self.0;
         for i in 2..powers.len() {
             powers[i] = powers[i - 1] * self.0;
-            console::log_1(&js_sys::JsString::from(format!("power at index: {} value: {:?}", i, powers[i])));
+            //console::log_1(&js_sys::JsString::from(format!("power at index: {} value: {:?}", i, powers[i])));
         }
         sum_of_products_pippenger::<C>(public_keys, &powers)
     }
@@ -151,7 +150,11 @@ fn convert_scalars<C: CurveArithmetic>(scalars: &[C::Scalar]) -> Vec<[u64; 4]> {
         .map(|s| {
             let mut out = [0u64; 4];
             let primitive: ScalarPrimitive<C> = (*s).into();
-            let small_limbs = primitive.as_limbs().iter().map(|l| l.0 as u64).collect::<Vec<_>>();
+            let small_limbs = primitive
+                .as_limbs()
+                .iter()
+                .map(|l| l.0 as u64)
+                .collect::<Vec<_>>();
             let mut i = 0;
             let mut j = 0;
             while i < small_limbs.len() && j < out.len() {
@@ -171,7 +174,14 @@ fn convert_scalars<C: CurveArithmetic>(scalars: &[C::Scalar]) -> Vec<[u64; 4]> {
         .map(|s| {
             let mut out = [0u64; 4];
             let primitive: ScalarPrimitive<C> = (*s).into();
-            out.copy_from_slice(primitive.as_limbs().iter().map(|l| l.0 as u64).collect::<Vec<_>>().as_slice());
+            out.copy_from_slice(
+                primitive
+                    .as_limbs()
+                    .iter()
+                    .map(|l| l.0 as u64)
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+            );
             out
         })
         .collect::<Vec<_>>()

@@ -157,14 +157,14 @@ to_find_and_replace = [
 scripts = [
     'constants.js',
     'convert.js',
-    '../pkg/ecdsa_wasm.js'
+    '../pkg/lit_ecdsa_wasm_combine.js'
 ]
 
 for script in scripts:
     s = open(script, "r", encoding="utf-8")
     scriptContent = s.read()
     s.close()
-    if script == '../pkg/ecdsa_wasm.js':
+    if script == '../pkg/lit_ecdsa_wasm_combine.js':
         for to_remove in to_remove_from_wasm_bridge:
             scriptContent = scriptContent.replace(to_remove, '')
         scriptContent = scriptContent.replace(to_find_and_replace[0], to_find_and_replace[1])
@@ -176,7 +176,7 @@ for script in scripts:
 
 # wasm tag
 # TODO a bit too much hardcoding here
-f = open("../pkg/ecdsa_wasm_bg.wasm.html.part")
+f = open("../pkg/lit_ecdsa_wasm_combine_bg.wasm.html.part")
 wasmHtml = f.read()
 f.close()
 page += wasmHtml + "\n"

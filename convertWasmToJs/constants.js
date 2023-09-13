@@ -1,13 +1,14 @@
-import pako from 'pako'
+// @ts-nocheck
+import pako from "pako";
 
 // Contants
 
-const skLen = 32 // bytes
-const pkLen = 48 // bytes
-const sigLen = 96 // bytes
-const maxMsgLen = 1049600 // bytes
-const maxCtLen = 1049600 // bytes
-const decryptionShareLen = 48 // bytes
+const skLen = 32; // bytes
+const pkLen = 48; // bytes
+const sigLen = 96; // bytes
+const maxMsgLen = 1049600; // bytes
+const maxCtLen = 1049600; // bytes
+const decryptionShareLen = 48; // bytes
 
 // the number of bytes in a row derived from a BivarPoly
 // which varies depending on the threshold.
@@ -22,8 +23,8 @@ const row_sizes_by_threshold = [
   264, // threshold 7
   296, // threshold 8
   328, // threshold 9
-  360 // threshold 10
-]
+  360, // threshold 10
+];
 
 // the number of bytes in a commitment derived from a BivarPoly
 // which varies depending on the threshold.
@@ -38,8 +39,8 @@ const commitment_sizes_by_threshold = [
   392, // threshold 7
   440, // threshold 8
   488, // threshold 9
-  536 // threshold 10
-]
+  536, // threshold 10
+];
 
 // the number of bytes in the master secret key (Poly)
 // which varies depending on the threshold.
@@ -54,5 +55,5 @@ const poly_sizes_by_threshold = [
   264, // threshold 7
   296, // threshold 8
   328, // threshold 9
-  360 // threshold 10
-]
+  360, // threshold 10
+];

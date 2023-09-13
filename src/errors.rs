@@ -2,7 +2,7 @@ use std::{error, fmt};
 
 #[derive(Debug)]
 pub(crate) enum CombinationError {
-    DeserializeError,    
+    DeserializeError,
 }
 
 impl error::Error for CombinationError {}
@@ -12,7 +12,6 @@ impl fmt::Display for CombinationError {
         use CombinationError::*;
         match self {
             DeserializeError => write!(f, "Could not deserialize value"),
-            
         }
     }
 }

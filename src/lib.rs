@@ -73,19 +73,28 @@ pub fn compute_public_key(id: String, public_keys: Array, key_type: u8) -> Strin
         hd_pub_keys.push(point);
     }
 
-    let id = id.as_bytes();
+    let id = hex::decode(id.as_bytes());
+    if id.is_err() {
+        panic!(
+            "Error while converting pubkey from hex encoding: {}",
+            id.err().unwrap()
+        );
+    }
+    let id = id.unwrap();
+    let id = id.as_slice();
     let deriver = match key_type {
         2 => combiners::hd_ecdsa::HdKeyDeriver::<Secp256k1>::new(id, combiners::hd_ecdsa::CXT),
-        _ => panic!("Invalid key type")
+        _ => panic!("Invalid key type"),
     };
-    
+
     if deriver.is_err() {
         panic!("Could not derive publick key {}", deriver.err().unwrap())
     }
 
     let deriver = deriver.unwrap();
     let pubkey = deriver.compute_public_key(&hd_pub_keys.as_slice());
-    let pubkey = hex::encode(pubkey.to_encoded_point(true).as_bytes());
+    // note that
+    let pubkey = hex::encode(pubkey.to_encoded_point(false).as_bytes());
 
     pubkey
 }
