@@ -4,7 +4,7 @@ use crate::{
 };
 
 use super::cs_curve::combine_signature_shares;
-use elliptic_curve::{bigint::Encoding, group::GroupEncoding};
+use elliptic_curve::{bigint::Encoding, group::GroupEncoding, ScalarPrimitive};
 use k256::{AffinePoint, Scalar, Secp256k1};
 
 #[derive(Clone, PartialEq, Debug)]
@@ -77,18 +77,26 @@ pub fn do_combine_signature(
     let sig = sig.unwrap();
 
     let r = sig.big_r;
-    let s = sig.s;
+    let mut s = sig.s;
+
+    // ethereum uses the "low s" rule, so we need to normalize s
+    let s_bi = num_bigint::BigUint::from_bytes_be(&s.to_bytes());
+    let order = num_bigint::BigUint::from_bytes_be(&k256::Secp256k1::ORDER.to_be_bytes());
+    let half_order = order.clone() >> 1;
+    if s_bi > half_order {
+        s = Scalar::from(
+            ScalarPrimitive::from_slice(&(order - s_bi).to_bytes_be())
+                .expect("Couldn't create scalar from bytes"),
+        );
+    }
 
     // calc the recovery id
     use elliptic_curve::point::AffineCoordinates;
     use elliptic_curve::Curve;
-    let mut recid = if presignature_big_r.y_is_odd().into() {
-        1
-    } else {
-        0
+    let recid = match presignature_big_r.y_is_odd().into() {
+        true => 1,
+        false => 0,
     };
-    let s_bi = num_bigint::BigUint::from_bytes_be(&s.to_bytes());
-    let order = num_bigint::BigUint::from_bytes_be(&k256::Secp256k1::ORDER.to_be_bytes());
 
     SignatureRecid { r, s, recid }
 }
