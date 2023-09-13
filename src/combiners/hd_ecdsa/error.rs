@@ -21,12 +21,8 @@ impl From<k256::elliptic_curve::Error> for Error {
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match write!(f, "{}", self.to_string()) {
-            Ok(_) => {
-                Ok(())
-            },
-            Err(e) => {
-                Err(e)
-            }
+            Ok(_) => Ok(()),
+            Err(e) => Err(e),
         }
     }
 }

@@ -5,8 +5,8 @@ use crate::{
 
 use super::cs_curve::combine_signature_shares;
 use elliptic_curve::{
-    group::GroupEncoding, ops::Reduce, point::AffineCoordinates,
-    sec1::ToEncodedPoint, Curve, CurveArithmetic, 
+    group::GroupEncoding, ops::Reduce, point::AffineCoordinates, sec1::ToEncodedPoint, Curve,
+    CurveArithmetic,
 };
 use k256::{
     ecdsa::{RecoveryId, VerifyingKey},
@@ -113,8 +113,6 @@ pub fn do_combine_signature(
     SignatureRecid { r, s, recid }
 }
 
-
-
 // #[doc = "Basic math required to agregate signature shares and generate the final sig."]
 // pub fn do_combine_signature(
 //     public_key: AffinePoint,
@@ -133,7 +131,7 @@ pub fn do_combine_signature(
 //     // calc the recovery id
 //     use elliptic_curve::point::AffineCoordinates;
 //     use elliptic_curve::Curve;
-//     let mut recid  =  if presignature_big_r.y_is_odd().into() { 1 } else { 0 };    
+//     let mut recid  =  if presignature_big_r.y_is_odd().into() { 1 } else { 0 };
 //     let s_bi = num_bigint::BigUint::from_bytes_be( &s.to_bytes());
 //     let order = num_bigint::BigUint::from_bytes_be( &k256::Secp256k1::ORDER.to_be_bytes());
 
