@@ -40,7 +40,8 @@ sha2 = "0.10"
 console_error_panic_hook = { version = "0.1.6", optional = false }
 wee_alloc = { version = "0.4.5", optional = true }
 getrandom = { version = "0.2", features = ["js"] }
-lit-frost = { git = "https://github.com/LIT-Protocol/lit-frost.git", version = "0.1.0" }
+frost-core = { version =  "1.0.0-rc.0", git = "https://github.com/LIT-Protocol/frost.git", features = ["internals"] }
+frost-ed25519 = { version =  "1.0.0-rc.0", git = "https://github.com/LIT-Protocol/frost.git" }
 # tokio = { version = "1.28.0",  features = ["rt-multi-thread"] }
 
 [dev-dependencies]

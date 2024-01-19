@@ -40,6 +40,7 @@ pub fn combine_signature(in_shares: Array, key_type: u8) -> String {
         // 2 => combiners::k256_zg::combine_signature(R_x, R_y, shares),
         2 => combiners::k256_cait_sith::combine_signature(shares),
         3 => combiners::p256_cait_sith::combine_signature(shares),
+        4 => combiners::frost::combine_signature::<frost_ed25519::Ed25519Sha512>(shares),
         _ => panic!("Invalid key type"),
     };
 

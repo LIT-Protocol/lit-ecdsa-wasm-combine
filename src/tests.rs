@@ -1,5 +1,12 @@
+use std::{collections::HashMap, num::NonZeroU8};
+
 use elliptic_curve::sec1::ToEncodedPoint;
+use frost_core::{
+    keys::{KeyPackage, VerifyingShare},
+    Signature,
+};
 use k256::Secp256k1;
+use rand::SeedableRng;
 
 #[cfg(test)]
 use crate::combiners;
@@ -56,4 +63,111 @@ pub fn hd_key_compute_pub_key() {
     let pubkey = hex::encode(pubkey.to_encoded_point(false).as_bytes());
 
     println!("pubkey {}", pubkey);
+}
+
+const MSG: &[u8] = b"test";
+const THRESHOLD: u16 = 2;
+const LIMIT: u16 = 3;
+
+#[test]
+#[ignore]
+/// Outputs values to be manually copied to `combiners/frost-test.json`
+pub fn generate_data_for_frost_ed25519sha512() {
+    use frost_core::*;
+
+    let mut rng = rand::rngs::StdRng::seed_from_u64(0); // deterministic for testing
+
+    let (secret_shares, public_package) = frost_core::keys::generate_with_dealer(
+        LIMIT,
+        THRESHOLD,
+        frost_core::keys::IdentifierList::<frost_ed25519::Ed25519Sha512>::Default,
+        &mut rng,
+    )
+    .unwrap();
+
+    let mut rng = rand::rngs::StdRng::seed_from_u64(0); // deterministic for testing
+
+    let round1 = secret_shares
+        .iter()
+        .map(|(identifier, secret_share)| {
+            (
+                identifier.clone(),
+                frost_core::round1::commit(secret_share.signing_share(), &mut rng),
+            )
+        })
+        .collect::<HashMap<_, _>>();
+
+    let signing_package = SigningPackage::new(
+        round1
+            .iter()
+            .map(|(identifier, (_, commitment))| (identifier.clone(), commitment.clone()))
+            .collect(),
+        MSG,
+    );
+
+    let round2 = secret_shares
+        .iter()
+        .map(|(identifier, secret_share)| {
+            (
+                identifier,
+                frost_core::round2::sign(
+                    &signing_package,
+                    &round1[identifier].0,
+                    &KeyPackage::new(
+                        identifier.clone(),
+                        secret_share.signing_share().clone(),
+                        VerifyingShare::from(*secret_share.signing_share()),
+                        public_package.verifying_key().clone(),
+                        THRESHOLD,
+                    ),
+                )
+                .unwrap(),
+            )
+        })
+        .collect::<HashMap<_, _>>();
+
+    eprintln!(
+        "{}",
+        serde_json::to_string_pretty(&hex::encode(MSG)).unwrap()
+    );
+
+    eprintln!("{}", serde_json::to_string_pretty(&public_package).unwrap());
+    eprintln!(
+        "{}",
+        serde_json::to_string_pretty(&signing_package).unwrap()
+    );
+    eprintln!("{}", serde_json::to_string_pretty(&round2).unwrap());
+}
+
+#[test]
+pub fn frost_ed25519_sha512() {
+    let signature = combiners::frost::combine_signature::<frost_ed25519::Ed25519Sha512>(
+        serde_json::from_str::<Vec<serde_json::Value>>(include_str!("combiners/frost-test.json"))
+            .unwrap()
+            .into_iter()
+            .map(|value| serde_json::to_string(&value).unwrap())
+            .collect(),
+    );
+
+    let mut rng = rand::rngs::StdRng::seed_from_u64(0); // deterministic for testing
+
+    let (_, public_package) = frost_core::keys::generate_with_dealer(
+        LIMIT,
+        THRESHOLD,
+        frost_core::keys::IdentifierList::<frost_ed25519::Ed25519Sha512>::Default,
+        &mut rng,
+    )
+    .unwrap();
+
+    eprintln!("{:?}", signature);
+
+    let signature =
+        serde_json::from_str::<Signature<frost_ed25519::Ed25519Sha512>>(&signature).unwrap();
+
+    assert!(signature.is_valid());
+
+    public_package
+        .verifying_key()
+        .verify(MSG, &signature)
+        .unwrap();
 }
