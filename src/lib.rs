@@ -2,9 +2,9 @@ extern crate console_error_panic_hook;
 extern crate wasm_bindgen;
 extern crate web_sys;
 
-use elliptic_curve::sec1::ToEncodedPoint;
+use hd_keys_curves_wasm::HDDeriver;
 use js_sys::Array;
-use k256::Secp256k1;
+use k256::elliptic_curve::sec1::ToEncodedPoint;
 use std::panic;
 use wasm_bindgen::prelude::*;
 
@@ -14,9 +14,6 @@ extern crate serde;
 extern crate serde_json;
 
 extern crate k256;
-extern crate num_bigint;
-extern crate num_integer;
-extern crate num_traits;
 extern crate rand;
 
 pub mod combiners;
@@ -36,14 +33,12 @@ pub fn combine_signature(in_shares: Array, key_type: u8) -> String {
         shares.push(in_shares.get(i).as_string().unwrap());
     }
 
-    let sig_hex = match key_type {
+    match key_type {
         // 2 => combiners::k256_zg::combine_signature(R_x, R_y, shares),
         2 => combiners::k256_cait_sith::combine_signature(shares),
         3 => combiners::p256_cait_sith::combine_signature(shares),
         _ => panic!("Invalid key type"),
-    };
-
-    sig_hex
+    }
 }
 
 #[wasm_bindgen]
@@ -82,17 +77,13 @@ pub fn compute_public_key(id: String, public_keys: Array, key_type: u8) -> Strin
     }
     let id = id.unwrap();
     let id = id.as_slice();
+
     let deriver = match key_type {
-        2 => combiners::hd_ecdsa::HdKeyDeriver::<Secp256k1>::new(id, combiners::hd_ecdsa::CXT),
+        2 => k256::Scalar::create(id, combiners::hd_ecdsa::CXT),
         _ => panic!("Invalid key type"),
     };
 
-    if deriver.is_err() {
-        panic!("Could not derive publick key {}", deriver.err().unwrap())
-    }
-
-    let deriver = deriver.unwrap();
-    let pubkey = deriver.compute_public_key(&hd_pub_keys.as_slice());
+    let pubkey = deriver.hd_derive_public_key(hd_pub_keys.as_slice());
     // note that
     let pubkey = hex::encode(pubkey.to_encoded_point(false).as_bytes());
 

@@ -1,13 +1,7 @@
 use super::cs_curve::combine_signature_shares;
 use crate::models::{SignatureRecidHex, SignedData};
-use elliptic_curve::{bigint::Encoding, group::GroupEncoding};
+use p256::elliptic_curve::group::GroupEncoding;
 use p256::{AffinePoint, NistP256, Scalar};
-
-#[derive(Clone, PartialEq, Debug)]
-struct Signature {
-    pub r: Scalar,
-    pub s: Scalar,
-}
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct SignatureRecid {
@@ -36,8 +30,8 @@ pub fn combine_signature(shares: Vec<String>) -> String {
     let sig = do_combine_signature(public_key, presignature_big_r, msg_hash, shares);
 
     let sig_hex = SignatureRecidHex {
-        r: hex::encode(&sig.r.to_bytes()),
-        s: hex::encode(&sig.s.to_bytes()),
+        r: hex::encode(sig.r.to_bytes()),
+        s: hex::encode(sig.s.to_bytes()),
         recid: sig.recid,
     };
 
@@ -60,17 +54,15 @@ pub fn do_combine_signature(
     let s = sig.s;
 
     // calc the recovery id
-    use elliptic_curve::point::AffineCoordinates;
-    use elliptic_curve::Curve;
+    use p256::elliptic_curve::point::AffineCoordinates;
+    use p256::elliptic_curve::scalar::IsHigh;
     let mut recid = if presignature_big_r.y_is_odd().into() {
         1
     } else {
         0
     };
-    let s_bi = num_bigint::BigUint::from_bytes_be(&s.to_bytes());
-    let order = num_bigint::BigUint::from_bytes_be(&NistP256::ORDER.to_be_bytes());
 
-    if s_bi > order - &s_bi {
+    if s.is_high().into() {
         recid ^= 1;
     }
 

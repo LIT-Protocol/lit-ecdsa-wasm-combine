@@ -2,8 +2,8 @@
 mod compat;
 
 use compat::CSCurve;
-use elliptic_curve::subtle::ConditionallySelectable;
-use elliptic_curve::{ops::Invert, scalar::IsHigh, Field, Group};
+use k256::elliptic_curve::subtle::ConditionallySelectable;
+use k256::elliptic_curve::{ops::Invert, scalar::IsHigh, Field, Group};
 
 /// Represents a signature with extra information, to support different variants of ECDSA.
 ///
@@ -45,9 +45,10 @@ pub fn combine_signature_shares<C: CSCurve>(
     presignature_big_r: C::AffinePoint,
     msg_hash: C::Scalar,
 ) -> Result<FullSignature<C>, &'static str> {
-    let mut s: C::Scalar = shares[0].into();
-    for s_j in shares.iter().skip(1) {
-        s += C::Scalar::from(*s_j)
+    let mut s: C::Scalar = shares[0];
+    for &s_j in shares.iter().skip(1) {
+        // s += C::Scalar::from(*s_j)
+        s += s_j
     }
 
     // Spec 2.3
