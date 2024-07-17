@@ -1,10 +1,10 @@
-pub enum KeyType {
-    Undefined = 0,
-    BLS = 1,
-    EcdsaZg = 2,
-    EcdsaCaitSithK256 = 3,
-    EcdsaCaitSithP256 = 4,
-}
+// pub enum KeyType {
+//     Undefined = 0,
+//     BLS = 1,
+//     EcdsaZg = 2,
+//     EcdsaCaitSithK256 = 3,
+//     EcdsaCaitSithP256 = 4,
+// }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SignatureRecidHex {

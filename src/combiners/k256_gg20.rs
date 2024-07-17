@@ -1,5 +1,5 @@
 use crate::models::SignatureRecidHex;
-use elliptic_curve::scalar::ScalarPrimitive;
+use k256::elliptic_curve::scalar::ScalarPrimitive;
 use k256::ecdsa::VerifyingKey;
 use num_bigint::BigUint as BigInt;
 use num_traits::Num;
@@ -14,11 +14,11 @@ pub const CURVE_ORDER: [u8; 32] = [
 use k256::Scalar as FE; // Field Element
 use num_integer::Integer;
 
-#[derive(Clone, PartialEq, Debug)]
-struct Signature {
-    pub r: FE,
-    pub s: FE,
-}
+// #[derive(Clone, PartialEq, Debug)]
+// struct Signature {
+//     pub r: FE,
+//     pub s: FE,
+// }
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct SignatureRecid {
@@ -77,7 +77,7 @@ pub fn hex_to_scalar(hex_val: &str) -> Result<FE, ()> {
         hex_val.insert(0, '0');
     }
 
-    let mut slice = hex::decode(hex_val).unwrap();
+    let slice = hex::decode(hex_val).unwrap();
     let slice = slice.as_slice();
 
     let sp = ScalarPrimitive::from_slice(slice).expect("Error decoding scalar from bytes");
@@ -105,7 +105,7 @@ pub fn hex_to_verifying_key(hex_val: &str) -> Result<VerifyingKey, ()> {
         // if length is odd, add a zero at the front
         hex_val.insert(0, '0');
     }
-    let mut slice = hex::decode(hex_val).unwrap();
+    let slice = hex::decode(hex_val).unwrap();
     let bytes = slice.as_slice();
     let pubkey =
         VerifyingKey::from_sec1_bytes(bytes).expect("Error decoding verifying key from bytes");
@@ -126,7 +126,7 @@ pub fn combine_signature_internal(
     let init = s_vec[0].clone();
     let mut s = s_vec.iter().skip(1).fold(init, |acc, x| acc + x);
 
-    let mut g_a = s.to_bytes();
+    let g_a = s.to_bytes();
     let g_a = g_a.as_slice();
     let s_bn = BigInt::from_bytes_be(&g_a);
 

@@ -4,7 +4,7 @@ use crate::{
 };
 
 use super::cs_curve::combine_signature_shares;
-use elliptic_curve::{
+use k256::elliptic_curve::{
     group::GroupEncoding, ops::Reduce, point::AffineCoordinates, sec1::ToEncodedPoint, Curve,
     CurveArithmetic,
 };
@@ -12,12 +12,6 @@ use k256::{
     ecdsa::{RecoveryId, VerifyingKey},
     AffinePoint, Scalar, Secp256k1,
 };
-
-#[derive(Clone, PartialEq, Debug)]
-struct Signature {
-    pub r: Scalar,
-    pub s: Scalar,
-}
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct SignatureRecid {
@@ -29,14 +23,13 @@ pub struct SignatureRecid {
 #[doc = "Entry point for recombining signatures."]
 pub fn combine_signature(shares: Vec<String>) -> String {
     let sig = combine_signature_internal(shares);
-    if sig.is_err() {
-        return sig.unwrap_err().to_string();
-    }
-
-    let sig = sig.unwrap();
+    let sig = match sig {
+        Ok(s) => s,
+        Err(e) => return e.to_string(),
+    };
     let sig_hex = SignatureRecidHex {
-        r: hex::encode(&sig.r.to_bytes()),
-        s: hex::encode(&sig.s.to_bytes()),
+        r: hex::encode(sig.r.to_bytes()),
+        s: hex::encode(sig.s.to_bytes()),
         recid: sig.recid,
     };
 
@@ -112,52 +105,3 @@ pub fn do_combine_signature(
     };
     SignatureRecid { r, s, recid }
 }
-
-// #[doc = "Basic math required to agregate signature shares and generate the final sig."]
-// pub fn do_combine_signature(
-//     public_key: AffinePoint,
-//     presignature_big_r: AffinePoint,
-//     msg_hash: Scalar,
-//     shares: Vec<Scalar>,
-// ) -> SignatureRecid {
-//     let sig =
-//         combine_signature_shares::<Secp256k1>(shares, public_key, presignature_big_r, msg_hash);
-
-//     let sig = sig.unwrap();
-
-//     let r = sig.big_r;
-//     let s = sig.s;
-
-//     // calc the recovery id
-//     use elliptic_curve::point::AffineCoordinates;
-//     use elliptic_curve::Curve;
-//     let mut recid  =  if presignature_big_r.y_is_odd().into() { 1 } else { 0 };
-//     // let s_bi = num_bigint::BigUint::from_bytes_be( &s.to_bytes());
-//     // let order = num_bigint::BigUint::from_bytes_be( &k256::Secp256k1::ORDER.to_be_bytes());
-
-//     // if s_bi > order - &s_bi {
-//     //     recid ^= 1;
-//     // }
-
-//     SignatureRecid { r, s, recid }
-// }
-
-// SIMPLIFIED
-// #[doc = "Basic math required to agregate signature shares and generate the final sig."]
-// pub fn do_combine_signature(
-//     public_key: AffinePoint,
-//     presignature_big_r: AffinePoint,
-//     msg_hash: Scalar,
-//     shares: Vec<Scalar>,
-// ) -> SignatureRecid {
-//     let sig =
-//         combine_signature_shares::<Secp256k1>(shares, public_key, presignature_big_r, msg_hash);
-
-//     let sig = sig.unwrap();
-//     let r = sig.big_r;
-//     let s = sig.s;
-//     // s is always low, so we have a simplified rec id calc of 1 or 0.
-//     let recid  =  if presignature_big_r.y_is_odd().into() { 0 } else { 1 };
-
-//     SignatureRecid { r, s, recid }
-// }

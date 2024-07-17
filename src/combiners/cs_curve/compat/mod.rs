@@ -1,4 +1,6 @@
-use elliptic_curve::{ops::Reduce, point::AffineCoordinates, Curve, CurveArithmetic, PrimeCurve};
+use k256::elliptic_curve::{
+    ops::Reduce, point::AffineCoordinates, Curve, CurveArithmetic, PrimeCurve,
+};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub mod k256_impl;
@@ -35,15 +37,15 @@ pub trait CSCurve: PrimeCurve + CurveArithmetic {
 #[derive(Clone, Copy)]
 pub(crate) struct SerializablePoint<C: CSCurve>(C::AffinePoint);
 
-impl<C: CSCurve> SerializablePoint<C> {
-    pub fn to_projective(self) -> C::ProjectivePoint {
-        self.0.into()
-    }
-
-    pub fn from_projective(point: &C::ProjectivePoint) -> Self {
-        Self((*point).into())
-    }
-}
+// impl<C: CSCurve> SerializablePoint<C> {
+//     pub fn to_projective(self) -> C::ProjectivePoint {
+//         self.0.into()
+//     }
+//
+//     pub fn from_projective(point: &C::ProjectivePoint) -> Self {
+//         Self((*point).into())
+//     }
+// }
 
 impl<C: CSCurve> Serialize for SerializablePoint<C> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
