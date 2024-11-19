@@ -40,12 +40,10 @@ pub fn combine_signature(shares: Vec<String>) -> String {
 fn combine_signature_internal(shares: Vec<String>) -> Result<SignatureRecid, CombinationError> {
     let mut signed_data: Vec<SignedDatak256> = Vec::new();
     for share in shares {
+        println!("received share: {:?}", &share);
         let data = serde_json::from_str(&share);
         if data.is_err() {
-            return Err(CombinationError::DeserializeError(format!(
-                "Unable to deserialize '{}' - {:?}",
-                share, data
-            )));
+            return Err(CombinationError::DeserializeError);
         }
         signed_data.push(data.unwrap());
     }
