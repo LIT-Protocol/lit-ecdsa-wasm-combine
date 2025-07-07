@@ -3,13 +3,10 @@ use crate::{
     models::{SignatureRecidHex, SignedDatak256},
 };
 
-use super::cs_curve::combine_signature_shares;
-use elliptic_curve::{
-    group::GroupEncoding, ops::Reduce, point::AffineCoordinates, sec1::ToEncodedPoint, Curve,
-    CurveArithmetic,
-};
+use super::cs_curve::{combine_signature_shares, FullSignature};
+use elliptic_curve::{bigint, group::GroupEncoding, ops::Reduce, point::AffineCoordinates, Curve, CurveArithmetic, subtle::ConstantTimeLess};
 use k256::{
-    ecdsa::{RecoveryId, VerifyingKey},
+    ecdsa::{RecoveryId, VerifyingKey, Signature as EcdsaSignature},
     AffinePoint, Scalar, Secp256k1,
 };
 
@@ -67,50 +64,46 @@ fn combine_signature_internal(shares: Vec<String>) -> Result<SignatureRecid, Com
 
     println!("sig: {:?}", &sig);
 
-    Ok(sig)
+    sig
 }
 
-#[doc = "Basic math required to agregate signature shares and generate the final sig."]
-pub fn do_combine_signature(
+#[doc = "Basic math required to aggregate signature shares and generate the final sig."]
+fn do_combine_signature(
     public_key: AffinePoint,
     presignature_big_r: AffinePoint,
     msg_hash: Scalar,
     shares: Vec<Scalar>,
-) -> SignatureRecid {
+) -> Result<SignatureRecid, CombinationError> {
+    const N: bigint::U256 = bigint::U256::from_be_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141");
+
     let sig =
         combine_signature_shares::<Secp256k1>(shares, public_key, presignature_big_r, msg_hash);
 
-    let sig = sig.unwrap();
+    let sig = sig.expect("Couldn't create signature");
 
-    let r = sig.big_r;
-    let s = sig.s;
+    let r_non_reduced = bigint::U256::from_be_slice(&sig.big_r.x());
+    let is_x_reduced = (!r_non_reduced.ct_lt(&N)).unwrap_u8();
+    let y_is_odd = sig.big_r.y_is_odd().unwrap_u8();
+    debug_assert!(assert_recovery_id_is_correct(public_key, msg_hash, &sig, is_x_reduced, y_is_odd));
 
-    let signature = k256::ecdsa::Signature::from_scalars(
-        <<Secp256k1 as CurveArithmetic>::Scalar as Reduce<<Secp256k1 as Curve>::Uint>>::reduce_bytes(&r.x()),
-        s,
-    ).expect("Couldn't create signature");
-    // Convert our signature into a recoverable one
-    let pubkey_0 = VerifyingKey::recover_from_prehash(
-        &msg_hash.to_bytes(),
-        &signature,
-        RecoveryId::try_from(0).expect("Couldn't create recovery id"),
-    )
-    .expect("Couldn't recover pubkey for recovery id : 0");
-    let pubkey_1 = VerifyingKey::recover_from_prehash(
-        &msg_hash.to_bytes(),
-        &signature,
-        RecoveryId::try_from(1).expect("Couldn't create recovery id"),
-    )
-    .expect("Couldn't recover pubkey for recovery id : 1");
+    Ok(SignatureRecid { r: sig.big_r, s: sig.s, recid: (is_x_reduced << 1) | y_is_odd })
+}
 
-    let recid = if pubkey_0.to_encoded_point(false) == public_key.to_encoded_point(false) {
-        0
-    } else if pubkey_1.to_encoded_point(false) == public_key.to_encoded_point(false) {
-        1
-    } else {
-        panic!("Neither recovery ID leads to the correct public key");
-    };
-    SignatureRecid { r, s, recid }
+fn assert_recovery_id_is_correct(
+    public_key: AffinePoint,
+    msg_hash: Scalar,
+    sig: &FullSignature<Secp256k1>,
+    is_x_reduced: u8,
+    y_is_odd: u8,
+) -> bool {
+    let recid = RecoveryId::from_byte(is_x_reduced << 1 | y_is_odd).expect("a correct recovery id");
+    let msg = msg_hash.to_bytes();
+    let r = <<Secp256k1 as CurveArithmetic>::Scalar as Reduce<<Secp256k1 as Curve>::Uint>>::reduce_bytes(&sig.big_r.x());
+    let ecdsa_sig = EcdsaSignature::from_scalars(r, sig.s).expect("Couldn't create signature");
+    if let Ok(vk) = VerifyingKey::recover_from_prehash(msg.as_slice(), &ecdsa_sig, recid) {
+        return *(vk.as_affine()) == public_key;
+    }
+    false
 }
 
 // #[doc = "Basic math required to agregate signature shares and generate the final sig."]
