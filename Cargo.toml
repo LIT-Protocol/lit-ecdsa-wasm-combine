@@ -29,7 +29,7 @@ num-traits = "0.2.15"
 
 
 elliptic-curve = { version = "0.13.5", features = ["serde"] }  
-k256 = { version = "0.13.0", features = ["sha256", "ecdsa", "serde", "ecdsa-core", "expose-field", "hash2curve"], optional = false }
+k256 = { version = "0.13.0", features = ["sha256", "ecdsa", "serde", "ecdsa-core", "expose-field", "hash2curve", "arithmetic"], optional = false }
 p256 = { version = "0.13", features = ["ecdsa-core", "expose-field", "hash2curve", "sha256", "serde"] }
 hex = "0.4.3"
 sha2 = "0.10"
@@ -44,7 +44,7 @@ getrandom = { version = "0.2", features = ["js"] }
 
 [dev-dependencies]
 digest = "0.10"
-vsss-rs = { version = "3.2", features = ["std"] }
+vsss-rs = { version = "5.1", features = ["std"] }
 
 [dependencies.rand]
 version = "0.8"

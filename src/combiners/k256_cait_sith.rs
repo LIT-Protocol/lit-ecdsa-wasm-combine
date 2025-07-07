@@ -4,9 +4,12 @@ use crate::{
 };
 
 use super::cs_curve::{combine_signature_shares, FullSignature};
-use elliptic_curve::{bigint, group::GroupEncoding, ops::Reduce, point::AffineCoordinates, Curve, CurveArithmetic, subtle::ConstantTimeLess};
+use elliptic_curve::{
+    bigint, group::GroupEncoding, ops::Reduce, point::AffineCoordinates, subtle::ConstantTimeLess,
+    Curve, CurveArithmetic,
+};
 use k256::{
-    ecdsa::{RecoveryId, VerifyingKey, Signature as EcdsaSignature},
+    ecdsa::{RecoveryId, Signature as EcdsaSignature, VerifyingKey},
     AffinePoint, Scalar, Secp256k1,
 };
 
@@ -74,36 +77,21 @@ fn do_combine_signature(
     msg_hash: Scalar,
     shares: Vec<Scalar>,
 ) -> Result<SignatureRecid, CombinationError> {
-    const N: bigint::U256 = bigint::U256::from_be_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141");
-
     let sig =
         combine_signature_shares::<Secp256k1>(shares, public_key, presignature_big_r, msg_hash);
-
     let sig = sig.expect("Couldn't create signature");
-
-    let r_non_reduced = bigint::U256::from_be_slice(&sig.big_r.x());
-    let is_x_reduced = (!r_non_reduced.ct_lt(&N)).unwrap_u8();
-    let y_is_odd = sig.big_r.y_is_odd().unwrap_u8();
-    debug_assert!(assert_recovery_id_is_correct(public_key, msg_hash, &sig, is_x_reduced, y_is_odd));
-
-    Ok(SignatureRecid { r: sig.big_r, s: sig.s, recid: (is_x_reduced << 1) | y_is_odd })
-}
-
-fn assert_recovery_id_is_correct(
-    public_key: AffinePoint,
-    msg_hash: Scalar,
-    sig: &FullSignature<Secp256k1>,
-    is_x_reduced: u8,
-    y_is_odd: u8,
-) -> bool {
-    let recid = RecoveryId::from_byte(is_x_reduced << 1 | y_is_odd).expect("a correct recovery id");
     let msg = msg_hash.to_bytes();
     let r = <<Secp256k1 as CurveArithmetic>::Scalar as Reduce<<Secp256k1 as Curve>::Uint>>::reduce_bytes(&sig.big_r.x());
     let ecdsa_sig = EcdsaSignature::from_scalars(r, sig.s).expect("Couldn't create signature");
-    if let Ok(vk) = VerifyingKey::recover_from_prehash(msg.as_slice(), &ecdsa_sig, recid) {
-        return *(vk.as_affine()) == public_key;
-    }
-    false
+    let vk = VerifyingKey::from_affine(public_key).expect("Couldn't create vk");
+    let recid = RecoveryId::trial_recovery_from_prehash(&vk, &msg, &ecdsa_sig)
+        .map_err(|_| CombinationError::DeserializeError)?;
+
+    Ok(SignatureRecid {
+        r: sig.big_r,
+        s: sig.s,
+        recid: recid.to_byte(),
+    })
 }
 
 // #[doc = "Basic math required to agregate signature shares and generate the final sig."]
@@ -154,3 +142,88 @@ fn assert_recovery_id_is_correct(
 
 //     SignatureRecid { r, s, recid }
 // }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use elliptic_curve::Field;
+    use k256::ProjectivePoint;
+    use rand::prelude::SliceRandom;
+    use vsss_rs::{
+        elliptic_curve::PrimeField, shamir, DefaultShare, IdentifierPrimeField, Share,
+        ShareIdentifier,
+    };
+
+    #[test]
+    fn combine_test() {
+        const THRESHOLD: usize = 6;
+        const SIGNERS: usize = 10;
+        const REPS: usize = 50;
+        const MSG: &[u8] = b"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0combine test";
+        type SecretShares =
+            DefaultShare<IdentifierPrimeField<Scalar>, IdentifierPrimeField<Scalar>>;
+        let z = Scalar::from_repr(<Scalar as PrimeField>::Repr::clone_from_slice(MSG)).unwrap();
+
+        let mut rng = rand::thread_rng();
+
+        for i in 0..REPS {
+            let sk = k256::ecdsa::SigningKey::random(&mut rng);
+            let pk = k256::ecdsa::VerifyingKey::from(&sk);
+
+            let sk_scalar: &Scalar = sk.as_nonzero_scalar().as_ref();
+            let secret = IdentifierPrimeField(*sk_scalar);
+            let mut shares =
+                shamir::split_secret::<SecretShares>(THRESHOLD, SIGNERS, &secret, &mut rng)
+                    .unwrap();
+
+            let k = Scalar::random(&mut rng);
+            let k_inv = k.invert().unwrap();
+            let big_r = ProjectivePoint::GENERATOR * k;
+            let big_r = big_r.to_affine();
+            let r = <<Secp256k1 as CurveArithmetic>::Scalar as Reduce<
+                <Secp256k1 as Curve>::Uint,
+            >>::reduce_bytes(&big_r.x());
+
+            shares.shuffle(&mut rng);
+            let mut sig_shares = Vec::with_capacity(THRESHOLD);
+            let ids = shares
+                .iter()
+                .take(THRESHOLD)
+                .map(|s| s.identifier.0)
+                .collect::<Vec<_>>();
+            for signing_share in shares.iter().take(THRESHOLD) {
+                let sig_share = k_inv
+                    * (z + signing_share.value.0 * r)
+                    * lagrange(&signing_share.identifier.0, &ids);
+                sig_shares.push(sig_share);
+            }
+
+            let sig = do_combine_signature(*pk.as_affine(), big_r, z, sig_shares).unwrap();
+            let signature = EcdsaSignature::from_scalars(r, sig.s).unwrap();
+            let recid = RecoveryId::trial_recovery_from_prehash(&pk, MSG, &signature).unwrap();
+            assert_eq!(
+                recid.to_byte(),
+                sig.recid,
+                "failed at iteration {}, expected {}, found {}",
+                i,
+                recid.to_byte(),
+                sig.recid
+            );
+        }
+    }
+
+    fn lagrange(xi: &Scalar, participants: &[Scalar]) -> Scalar {
+        let xi = *(xi.as_ref());
+        let mut num = Scalar::ONE;
+        let mut den = Scalar::ONE;
+        for xj in participants {
+            let xj = *(xj.as_ref());
+            if xi == xj {
+                continue;
+            }
+            num *= xj;
+            den *= xj - xi;
+        }
+        num * den.invert().expect("Denominator should not be zero")
+    }
+}
